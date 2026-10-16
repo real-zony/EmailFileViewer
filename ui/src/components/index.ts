@@ -18,5 +18,5 @@ export { PalettePicker, PalettePreview, type PaletteOption, type PalettePickerPr
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl.tsx'
 export { SettingsDialog, type SettingsDialogProps, type SettingsLabels } from './SettingsDialog.tsx'
 export { TabBar, type TabBarProps, type TabItem } from './TabBar.tsx'
-export { Toast, ToastRegion, type ToastProps } from './Toast.tsx'
+export { Toast, ToastRegion, type ToastProps, type ToastVariant } from './Toast.tsx'
 export { Breadcrumbs, Toolbar, type BreadcrumbsProps, type CrumbItem, type ToolbarProps } from './Toolbar.tsx'

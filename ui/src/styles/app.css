@@ -393,8 +393,7 @@ body { background: var(--efv-desk); }
 .addr-more { font-size: var(--efv-text-xs); }
 
 .badges { display: flex; flex-wrap: wrap; gap: var(--efv-space-2); }
-.badge-wrap { position: relative; display: inline-flex; }
-.badge-wrap .popover { top: calc(100% + 6px); left: 0; }
+.badge-wrap { display: inline-flex; }
 .badge {
   display: inline-flex;
   align-items: center;
@@ -412,18 +411,22 @@ body { background: var(--efv-desk); }
 .badge .btn--icon { --_h: 20px; margin-right: -4px; color: var(--efv-ink-2); border-radius: var(--efv-radius-pill); }
 .badge .btn--icon svg { width: 14px; height: 14px; }
 
-/* 说明气泡（签名说明等） */
+/* 说明气泡（签名说明等）：渲染在 body 下，position: fixed，由 floating.ts 计算位置。
+   不在 .win 内，所以字体、颜色要自己声明。 */
 .popover {
-  position: absolute;
-  z-index: 20;
-  width: 300px;
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  width: min(300px, calc(100vw - 16px));
   padding: var(--efv-space-3);
   border-radius: var(--efv-radius-lg);
   background: var(--efv-raised);
   box-shadow: var(--efv-shadow-pop);
+  font-family: var(--efv-font-ui);
   font-size: var(--efv-text-xs);
   line-height: var(--efv-leading-relaxed);
   color: var(--efv-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ---------- 7. 附件 ----------------------------------------------------- */
@@ -688,6 +691,14 @@ body { background: var(--efv-desk); }
   animation: efv-in var(--efv-dur-slow) var(--efv-ease-out);
 }
 .toast__icon { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--efv-danger-icon); }
+/* 通知的语义变体：左边线和图标同色；颜色组合都在对比度检查里 */
+.toast--error { border-left-color: var(--efv-danger-icon); }
+.toast--warning { border-left-color: var(--efv-warn-icon); }
+.toast--warning .toast__icon { color: var(--efv-warn-icon); }
+.toast--success { border-left-color: var(--efv-accent); }
+.toast--success .toast__icon { color: var(--efv-accent); }
+.toast--info { border-left-color: var(--efv-ink-3); }
+.toast--info .toast__icon { color: var(--efv-ink-2); }
 .toast__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .toast__title { font-weight: var(--efv-weight-semibold); }
 .toast__text { color: var(--efv-ink-2); font-size: var(--efv-text-xs); line-height: var(--efv-leading-normal); }

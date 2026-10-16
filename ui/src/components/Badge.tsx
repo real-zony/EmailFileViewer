@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { IconButton } from './Button.tsx'
 import { Icon, type IconName } from './Icon.tsx'
+import { useFloatingPosition } from './floating.ts'
 
 export interface BadgeProps {
   icon: IconName
@@ -16,6 +18,8 @@ export function Badge({ icon, children, muted, details }: BadgeProps) {
   const [open, setOpen] = useState(false)
   const popId = useId()
   const wrap = useRef<HTMLSpanElement>(null)
+  const pop = useRef<HTMLSpanElement>(null)
+  const pos = useFloatingPosition(open, wrap, pop)
 
   useEffect(() => {
     if (!open) return
@@ -23,7 +27,9 @@ export function Badge({ icon, children, muted, details }: BadgeProps) {
       if (e.key === 'Escape') setOpen(false)
     }
     const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (wrap.current?.contains(target) || pop.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('keydown', onKey)
     document.addEventListener('mousedown', onDown)
@@ -51,11 +57,22 @@ export function Badge({ icon, children, muted, details }: BadgeProps) {
           />
         )}
       </span>
-      {details && open && (
-        <span className="popover" id={popId} role="note">
-          {details.content}
-        </span>
-      )}
+      {/* 气泡渲染到 body 并用 fixed 定位，不会被 .viewer__top 的 overflow 裁切；贴近窗口边缘时翻转或内收 */}
+      {details &&
+        open &&
+        createPortal(
+          <span
+            ref={pop}
+            className="popover"
+            id={popId}
+            role="note"
+            data-placement={pos?.placement}
+            style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
+          >
+            {details.content}
+          </span>,
+          document.body,
+        )}
     </span>
   )
 }

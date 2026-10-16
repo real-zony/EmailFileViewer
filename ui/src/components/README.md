@@ -89,6 +89,7 @@ import { AttachmentList, BodySheet, MessageHeader } from './components/index.ts'
 
 ### `Badge`、`BadgeList`
 
+- 说明气泡通过 portal 渲染到 `document.body`，用 `position: fixed` 定位（`floating.ts`），不会被 `.viewer__top` 的 `overflow` 裁切。默认显示在徽标下方；下方放不下时翻到上方，左右超出窗口时向内收。
 - `Badge { icon, children, muted?, details?: { buttonLabel, content } }`：签名徽标用 `icon="seal"`、`muted={t('signature.notVerified')}`，并在 `details` 里放说明；加密徽标用 `icon="lock"`。徽标始终是中性色。气泡在按 Esc 或点击外部时关闭。
 - 传给 `MessageHeader` 时用 `badges={<BadgeList>…</BadgeList>}`。
 
@@ -133,7 +134,13 @@ import { AttachmentList, BodySheet, MessageHeader } from './components/index.ts'
 ### `ToastRegion`、`Toast`
 
 - `ToastRegion { label }` 放在 `MainArea` 里（位于右上角）。
-- `Toast { title, children?, actions? }` 带 `role="status"`，**不自动消失**。目前只用于“打开 N 个文件中的 M 个”的汇总。
+- `Toast { title, children?, actions?, variant? }` 带 `role="status"`，**不自动消失**。
+- `variant` 决定颜色和图标，沿用语义色。默认值是 `error`，与原来只有一种红色通知时的含义一致。
+  - `success`：强调色加对勾，用于“已保存”“已打开”。
+  - `info`：灰色加 i，用于中性信息。
+  - `warning`：琥珀色加三角，用于部分失败，例如批次汇总，或“全部保存”中有文件失败。
+  - `error`：红色加叉，用于操作失败。
+- 四种变体的图标形状各不相同，不只靠颜色区分。图标和左边线的颜色组合都在对比度检查里。
 
 ### `EmptyState`、`DropOverlay`
 

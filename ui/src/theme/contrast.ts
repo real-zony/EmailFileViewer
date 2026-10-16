@@ -45,7 +45,10 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   { fg: 'accent', bg: 'accent-soft', level: 'ui', use: 'selected option border' },
   { fg: 'warn-icon', bg: 'warn-bg', level: 'ui', use: 'notice icon' },
   { fg: 'danger-icon', bg: 'danger-bg', level: 'ui', use: 'error icon' },
-  { fg: 'danger-icon', bg: 'raised', level: 'ui', use: 'toast icon and edge' },
+  { fg: 'danger-icon', bg: 'raised', level: 'ui', use: 'error toast icon and edge' },
+  { fg: 'warn-icon', bg: 'raised', level: 'ui', use: 'warning toast icon and edge' },
+  { fg: 'accent', bg: 'raised', level: 'ui', use: 'success toast icon and edge' },
+  { fg: 'ink-2', bg: 'raised', level: 'ui', use: 'info toast icon' },
 ]
 
 export interface ContrastResult extends ContrastPair {

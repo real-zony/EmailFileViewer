@@ -41,6 +41,7 @@ export function Toasts({ toasts, controller }: ToastsProps) {
             return (
               <Toast
                 key={toast.id}
+                variant="warning"
                 title={t('toast.partialTitle', { ok: toast.opened, all: toast.total })}
                 actions={
                   <>
@@ -90,6 +91,7 @@ export function Toasts({ toasts, controller }: ToastsProps) {
             return (
               <Toast
                 key={toast.id}
+                variant={failed > 0 ? 'warning' : 'success'}
                 title={failed > 0 ? t('toast.savedSome', { saved: toast.saved, total: toast.total }) : t('toast.savedAll', { count: toast.saved })}
                 actions={dismiss(toast.id)}
               >
