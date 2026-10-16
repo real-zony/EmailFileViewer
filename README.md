@@ -15,7 +15,7 @@ The project is in early development. The Tauri shell and the UI are currently pl
 | Tool | Version |
 | --- | --- |
 | [Rust](https://rustup.rs) (stable) | 1.90 or newer |
-| [Node.js](https://nodejs.org) | 20.19+ or 22.12+ (required by Vite); npm is the package manager |
+| [Node.js](https://nodejs.org) | 24.15+ (the UI scripts run `.ts` files directly); npm is the package manager |
 | [.NET SDK](https://dotnet.microsoft.com/download) | 10.0 (see `global.json`) |
 | Tauri CLI | 2.x |
 

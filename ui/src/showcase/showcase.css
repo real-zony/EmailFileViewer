@@ -1,0 +1,31 @@
+/* 展示页自身的外框，只在开发模式下加载 */
+.sc {
+  min-height: 100vh;
+  background: #c9cfcc;
+  font-family: var(--efv-font-ui);
+  font-size: 13px;
+}
+[data-mode="dark"] .sc { background: #070a09; }
+@media (prefers-color-scheme: dark) { [data-mode="system"] .sc { background: #070a09; } }
+.sc__bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 8px 16px;
+  background: #1d2421;
+  color: #e7ece9;
+}
+.sc__bar label { display: inline-flex; align-items: center; gap: 6px; }
+.sc__frame {
+  width: min(1200px, calc(100% - 32px));
+  height: 760px;
+  margin: 24px auto;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 24px 60px -20px rgba(0, 0, 0, 0.45);
+}
+.sc__frame--narrow { width: 800px; height: 640px; }

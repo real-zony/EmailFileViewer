@@ -122,6 +122,14 @@
 - "全部保存"遇到重名时生成 `name (1).ext` 这样的新名称，不覆盖已有文件。
 - 打开附件：sidecar 把附件写到本次会话专用的临时目录，Rust 用系统默认程序打开；临时目录在应用退出和下次启动时清理。
 - 可执行文件和脚本按扩展名拒绝直接打开（Windows：`.exe .bat .cmd .com .msi .ps1 .vbs .js .jse .wsf .scr .lnk .hta .cpl`；macOS：`.app .command .pkg`；Linux：`.sh .desktop .AppImage .run`），只允许保存。
+  - 实现后补充了这些同样会执行代码或常被用来投递恶意软件的类型：
+    - 代码和脚本：`.jar .vbe .ws .wsh .psm1 .psd1 .ps1xml .reg .msc`
+    - 快捷方式：`.scf .url .pif`
+    - 安装包：`.msix .msixbundle .appx .appxbundle .appinstaller .application`
+    - Excel 加载项：`.xll`
+    - 可挂载的磁盘映像：`.iso .img .vhd .vhdx`
+  - 判断时按清理后文件名的最后一个扩展名，不区分大小写。
+- 解析 S/MIME 的 MSG 前，Core 先在内存副本中把消息类改回 `IPM.Note` 再交给 MsgReader。原因是 MsgReader 处理 S/MIME 时会调用证书链验证，可能联网检查吊销状态，违反"查看时不产生网络请求"。
 
 ### D7. 前端：React + TypeScript + Vite（建议的默认，待确认）
 
