@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-mode="system" data-palette="verdigris">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EmailFileViewer UI draft</title>
+  <script>
+    /* Apply appearance before first paint (no flash). In the app the values come from the
+       Rust side via an initialization script; here they come from the URL or localStorage. */
+    (function () {
+      var d = document.documentElement, s = {};
+      try { s = JSON.parse(localStorage.getItem("efv-draft") || "{}"); } catch (e) {}
+      location.search.slice(1).split("&").forEach(function (kv) { var p = kv.split("="); if (p[0] === "mode" || p[0] === "palette") s[p[0]] = p[1]; if (p[0] === "theme") s.mode = p[1]; });
+      if (s.mode) d.setAttribute("data-mode", s.mode);
+      if (s.palette) d.setAttribute("data-palette", s.palette);
+    })();
+  </script>
+  <link rel="stylesheet" href="themes.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="draft.css">
+</head>
+<body>
+  <!-- Draft navigation: review tooling only, not part of the app. -->
+  <header class="dnav">
+    <div class="dnav__row">
+      <div class="dnav__brand">EmailFileViewer <small>UI 草稿 6.2 · 静态原型</small></div>
+      <span class="dnav__spacer"></span>
+      <div class="dnav__group" role="group" aria-label="模式">
+        <span class="dnav__group-label">模式</span>
+        <span class="seg">
+          <button type="button" data-set="mode:light">浅色</button>
+          <button type="button" data-set="mode:dark">深色</button>
+          <button type="button" data-set="mode:system">跟随系统</button>
+        </span>
+      </div>
+      <div class="dnav__group" role="group" aria-label="配色方案">
+        <span class="dnav__group-label">配色</span>
+        <span class="seg" id="palette-seg"></span>
+      </div>
+      <div class="dnav__group" role="group" aria-label="界面语言">
+        <span class="dnav__group-label">语言</span>
+        <span class="seg">
+          <button type="button" data-set="lang:en">English</button>
+          <button type="button" data-set="lang:zh">简体中文</button>
+        </span>
+      </div>
+      <div class="dnav__group" role="group" aria-label="窗口宽度">
+        <span class="dnav__group-label">窗口</span>
+        <span class="seg">
+          <button type="button" data-set="width:wide">1200</button>
+          <button type="button" data-set="width:narrow">800</button>
+        </span>
+      </div>
+      <label class="toggle"><input type="checkbox" id="notes-toggle"><span>显示标注</span></label>
+    </div>
+    <nav class="dnav__row" aria-label="界面">
+      <div class="chips" id="chips"></div>
+    </nav>
+  </header>
+
+  <main class="stage" id="stage"></main>
+
+  <script src="palettes.js"></script>
+  <script src="mail-bodies.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
