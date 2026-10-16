@@ -6,6 +6,12 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-set-background-color",
+    "core:window:allow-set-theme",
+    "core:webview:allow-set-webview-background-color",
+    "store:allow-load",
+    "store:allow-set",
+    "store:allow-save"
   ]
 }

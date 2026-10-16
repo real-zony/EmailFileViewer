@@ -1,0 +1,25 @@
+{
+  "default": "verdigris",
+  "palettes": {
+    "verdigris": {
+      "light": "#e6eae8",
+      "dark": "#121715"
+    },
+    "graphite": {
+      "light": "#e8e8e7",
+      "dark": "#161616"
+    },
+    "indigo": {
+      "light": "#e7e9ef",
+      "dark": "#121420"
+    },
+    "plum": {
+      "light": "#ebe7e4",
+      "dark": "#18141a"
+    },
+    "contrast": {
+      "light": "#ffffff",
+      "dark": "#000000"
+    }
+  }
+}

@@ -13,11 +13,16 @@
     "themes": "node scripts/build-themes.ts",
     "themes:check": "node scripts/build-themes.ts --check",
     "contrast": "node scripts/check-contrast.ts",
+    "i18n": "node scripts/check-i18n.ts",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-store": "^2.5.0",
+    "i18next": "^26.4.7",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.20"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",

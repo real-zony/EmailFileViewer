@@ -1,6 +1,6 @@
 # 展示组件说明
 
-`src/components/` 下的组件只负责展示：数据、文案和回调都通过 props 传入。组件里**不调用 Tauri / IPC，不包含业务逻辑，也不写死界面文字**。界面文字由调用方通过 i18n（7.1）取得后传进来；需要代入数字或文件名的文案，props 接收函数，例如 `moreLabel={(n) => t('header.more', { n })}`。
+`src/components/` 下的组件只负责展示：数据、文案和回调都通过 props 传入。组件里**不调用 Tauri / IPC，不包含业务逻辑，也不写死界面文字**。界面文字由调用方通过 i18n 取得后传进来（资源在 `src/i18n/locales/{en,zh-CN}.json`，用 `useTranslation()` 的 `t('key')`；key 在编译期检查，`npm run i18n` 检查两种语言的 key 和 `{{参数}}` 一致）；需要代入数字或文件名的文案，props 接收函数，例如 `moreLabel={(n) => t('header.more', { n })}`。
 
 设计依据是已确认的草稿 `docs/design/ui-draft/`（`README.md` 是设计规范，`index.html` 是原型）。开发模式下访问 `http://localhost:1420/?showcase` 可以打开组件展示页，用静态数据重现草稿的关键界面，页面顶部可以切换界面、模式、配色和 800px 窄窗口。也可以直接带参数打开某个状态，例如 `?showcase&screen=settings&mode=dark&palette=plum`。生产构建不包含展示页。
 
@@ -14,7 +14,7 @@ import { AttachmentList, BodySheet, MessageHeader } from './components/index.ts'
 
 - 颜色令牌的唯一数据源是 `src/theme/palettes.ts`。`npm run themes` 由它生成 `src/theme/themes.css`（提交到仓库）；`npm run themes:check` 和单元测试都会检查两者是否一致。**不要手改 `themes.css`。**
 - 与颜色无关的令牌（字号、间距、圆角、动效）和全部组件样式在 `src/styles/app.css`。类名与草稿相同。
-- 切换主题只需要改 `<html>` 上的两个属性：`data-mode`（`light` / `dark` / `system`）和 `data-palette`（方案 id）。目前 `index.html` 固定为 `system` 和 `verdigris`；读取设置、在首次绘制前应用属于 8.3/8.4。
+- 切换主题只需要改 `<html>` 上的两个属性：`data-mode`（`light` / `dark` / `system`）和 `data-palette`（方案 id）。`index.html` 里写的 `system`、`verdigris` 只是没有 Tauri 时（浏览器里 `npm run dev`）的默认值：正式运行时 Rust 在创建窗口前读取已保存的设置，通过 `initialization_script` 在首次绘制前覆盖这三个属性（`data-mode`、`data-palette`、`lang`），`main.tsx` 渲染前再同步应用一次。运行时切换由 `App` 负责（`src/settings/`）。
 - 邮件纸面颜色不是主题令牌：`.sheet__body` 和 `.sheet__frame` 上的 `--efv-paper: #ffffff` 是固定值，iframe 上设置了 `color-scheme: light`。
 - 窄窗口规则写在 `@container win (max-width: 860px)` 中。`.win` 就是整个 WebView，所以效果等同于媒体查询。
 - 焦点环由 `.win :focus-visible` 统一提供；`prefers-reduced-motion` 时所有动效时长都会归零。
@@ -165,7 +165,8 @@ import { AttachmentList, BodySheet, MessageHeader } from './components/index.ts'
 | `npm test` | Vitest + Testing Library（jsdom）。组件测试在 `src/components/__tests__/`，主题测试在 `src/theme/__tests__/` |
 | `npm run typecheck` | `tsc -b`（app、node、test 三个工程） |
 | `npm run lint` | oxlint；CI 中加 `--deny-warnings` |
-| `npm run themes` / `themes:check` | 生成 `themes.css`，或检查它是否与数据源一致 |
+| `npm run themes` / `themes:check` | 生成 `themes.css` 和 Rust 读取窗口底色的 `src-tauri/src/window_colors.json`，或检查它们是否与数据源一致 |
+| `npm run i18n` | 界面文案检查（`scripts/check-i18n.ts`）：两种语言的 key 集合和插值参数必须一致 |
 | `npm run contrast` | 对比度检查（`scripts/check-contrast.ts`）；加 `--md` 输出 Markdown 汇总表，加 `--all` 列出每一组 |
 
 `scripts/*.ts` 用 Node 的类型擦除直接运行（Node ≥ 22.18，CI 用 24），所以被这些脚本导入的 `src/theme/*.ts` 只能使用可擦除的 TS 语法（`tsconfig` 中开启了 `erasableSyntaxOnly`），导入路径要带 `.ts` 后缀。
