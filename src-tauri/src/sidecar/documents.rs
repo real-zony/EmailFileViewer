@@ -3,10 +3,12 @@
 //! sidecar 的 `docId` 只在它那一代进程内有效。每个句柄记录它属于哪一代 sidecar、对应的 `docId`，
 //! 以及来源：顶层文件的路径，或“父文档 + 附件 Id”。sidecar 重启后，旧代次的句柄在下次使用时按来源重新打开。
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 
+use serde_json::Value;
 use tokio::sync::Mutex;
 
 use super::protocol::DocHandle;
@@ -31,6 +33,8 @@ pub(crate) struct Residence {
 pub(crate) struct DocEntry {
     pub handle: DocHandle,
     pub source: Source,
+    /// 附件 Id -> 文件名（文档里没有文件名的为 `None`）。保存对话框的默认文件名要用，Rust 不向 sidecar 再查一次。
+    pub attachment_names: HashMap<String, Option<String>>,
     /// 加锁期间不会有第二个请求同时重新打开同一个文档。
     pub residence: Mutex<Residence>,
     /// 还没有关闭的子文档（嵌套邮件）个数。
@@ -47,14 +51,53 @@ impl DocEntry {
         source: Source,
         generation: u64,
         doc_id: String,
+        document: &Value,
     ) -> Arc<Self> {
         Arc::new(Self {
             handle,
             source,
+            attachment_names: attachment_names(document),
             residence: Mutex::new(Residence { generation, doc_id }),
             open_children: AtomicUsize::new(0),
             closed_by_user: AtomicBool::new(false),
             finalized: AtomicBool::new(false),
         })
+    }
+}
+
+/// 从 sidecar 返回的 `document.attachments` 里取出 Id 和文件名。
+fn attachment_names(document: &Value) -> HashMap<String, Option<String>> {
+    let Some(list) = document.get("attachments").and_then(Value::as_array) else {
+        return HashMap::new();
+    };
+    list.iter()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_str()?.to_owned();
+            Some((
+                id,
+                item.get("fileName")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            ))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attachment_names_are_read_from_the_document() {
+        let document = serde_json::json!({ "attachments": [
+            { "id": "2", "fileName": "report.pdf" },
+            { "id": "3", "fileName": null },
+            { "fileName": "no-id.txt" },
+        ]});
+        let names = attachment_names(&document);
+        assert_eq!(names.len(), 2);
+        assert_eq!(names["2"].as_deref(), Some("report.pdf"));
+        assert_eq!(names["3"], None);
+        assert!(attachment_names(&serde_json::json!({})).is_empty());
     }
 }

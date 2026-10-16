@@ -248,8 +248,23 @@
 
 - [MsgReader 或 MimeKit 不兼容 AOT] → 按 D3 退回自包含的 JIT 发布，并补上 macOS entitlements；把这个实验排在第一个任务。
 - [Tauri 的新窗口拦截在某个平台上行为不一致，链接无法交给系统浏览器] → 先做实验；退路是让链接不可点击，但显示实际地址并提供"复制链接"操作。
+  - **macOS 实验结果（任务 5.7，2026-10-17，WKWebView）：拦截有效，不需要退路。**
+    - Tauri 的 `WebviewWindowBuilder::on_new_window` 在 macOS 上对应 WKWebView 的 `createWebViewWithConfiguration` 代理。（读 wry 源码）没有设置回调时，wry 返回 nil，新窗口请求被静默丢弃；设置回调后，回调的返回值决定结果，我们始终返回 `Deny`。
+    - 在沙箱 iframe（`allow-popups allow-popups-to-escape-sandbox`）里点击 `target="_blank"` 的 `http` 链接：回调被调用，链接交给 opener，**系统默认浏览器（Chrome）收到了请求**，应用内没有出现新窗口（应用的窗口数不变）。`window.open` 同样。
+    - `file://` 链接：回调没有被调用（没有日志），也没有任何程序被启动，推测是 WebKit 在更早的地方拒绝了。
+    - 没有 `target` 的链接在 iframe 内导航：被应用 CSP 的 `frame-src`（回退到 `default-src 'self'`）拦下，既不在 iframe 里加载，也不会打开外部程序。sidecar 给所有链接加了 `target="_blank"`，所以正常邮件不会出现这种情况。
+    - 实验方法的限制：本机没有辅助功能权限，无法合成真实的鼠标点击，所以点击是由主窗口的脚本通过 `webview.eval`（WKWebView 把它当作用户手势）在 iframe 内触发的，iframe 为此多加了 `allow-same-origin`。沙箱标志不影响 `createWebView` 代理这条路径，但**真实鼠标点击还没有在 macOS 上手动确认**。
+    - **Windows 和 Linux 无法在本机实验，留到 10.2 实机验证**（WebView2 的 `NewWindowRequested`、WebKitGTK 的 `create` 信号）。
 - [Tauri IPC 能被 iframe 中的内容访问] → capabilities 只授予主窗口本地来源；用专门构造的恶意样本邮件在三个平台上验证 iframe 中拿不到 IPC。
+  - **macOS 实验结果（任务 5.7，2026-10-17）：iframe 里拿不到 IPC。** 用 `samples/html-malicious.eml` 的原始 HTML（含脚本、事件属性、`javascript:` 链接）放进沙箱 iframe（`sandbox="allow-popups allow-popups-to-escape-sandbox"`，meta CSP 与前端一致）：脚本一个都没有执行，没有收到任何 `postMessage`。
+  - 纵深防御（仅测试用，给 iframe 加 `allow-scripts`，并临时去掉应用 CSP 让脚本能跑）：iframe 内 `window.__TAURI_INTERNALS__` 和 `window.__TAURI__` 都是 `undefined`（macOS 上初始化脚本只注入主框架），访问 `parent.__TAURI_INTERNALS__` 抛 `SecurityError`；直接 `fetch('ipc://localhost/app_ready')` 被 IPC 协议拒绝（HTTP 500，缺少 `Tauri-Invoke-Key`，这个密钥只有主框架知道）。
+  - 注意：`initialization_script` 在 **Windows 上会进入所有子框架**（Tauri 文档），那里 iframe 内可能存在 `__TAURI_INTERNALS__`，防线是 capabilities 只授予本地来源（沙箱 iframe 的来源是不透明的）。**Windows 和 Linux 留到 10.2 实机验证。**
 - [三个平台的 WebView 对 sandbox / srcdoc / CSP 的实现有差异] → 样本邮件在三个平台上都跑界面测试；差异只影响查看器，PDF 将来在服务端统一渲染。
+  - **macOS 实验结果（任务 5.7，2026-10-17）：`srcdoc` 的 iframe 继承应用的 CSP**，邮件正文的 meta CSP 只能在其基础上进一步收紧，所以应用 CSP 必须允许邮件需要的 `data:`、`https:`、`http:` 图片和字体以及内联样式，否则用户允许远程内容后也加载不了。实测：
+    - 主框架里运行时插入的内联脚本被 `script-src 'self'` 拦截；`srcdoc` 的 iframe 即使带 `allow-scripts`，内联脚本也被继承的 CSP 拦截（去掉应用 CSP 后同一个 iframe 里的脚本会执行，说明拦截来自 CSP）。
+    - iframe 里的内联样式属性、`<style>` 元素、`data:` 图片都正常；默认的邮件 CSP 下远程图片没有发出请求，放宽成允许 `http:` 之后图片请求到达了服务器。
+    - **Tauri 会给页面里的 `<style>` 元素加 nonce 并写进 `style-src`，nonce 一出现，`'unsafe-inline'` 就被忽略，iframe 里的邮件样式会全部失效。** 因此 `tauri.conf.json` 里设置了 `dangerousDisableAssetCspModification: ["style-src"]`，之后页面里有没有 `<style>` 都不影响邮件样式（实验页面里特意放了一个 `<style>`）。
+    - Windows（WebView2）和 Linux（WebKitGTK）对 sandbox / srcdoc / CSP 的行为**留到 10.2 实机验证**。
 - [超大邮件（几十 MB 的内嵌图片）导致 JSON 消息过大、界面卡顿] → v1 先用 `data:` URI，设定单条消息大小的监控；超过阈值时改用自定义协议按需加载。
 - [macOS 最低支持 15 会排除较旧的 Mac] → 这是 .NET 10 官方支持范围决定的；后续可以在 macOS 13/14 上实测，确认能运行后再放宽说明。
 - [Windows 签名服务对个人开发者的身份审核耗时较长] → 尽早申请；审核通过前的内部测试版本不签名，只在 GitHub 上以预发布形式提供。

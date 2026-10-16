@@ -8,51 +8,10 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tokio::time::sleep;
 
+use super::testing::{service, service_with, timeouts};
 use super::*;
 
 // ---------------------------------------------------------------- 辅助
-
-fn fake_program() -> PathBuf {
-    let exe = std::env::current_exe().unwrap();
-    // target/debug/deps/<测试程序> -> target/debug/examples/fake_sidecar
-    let program = exe
-        .parent()
-        .and_then(Path::parent)
-        .unwrap()
-        .join("examples")
-        .join(format!("fake_sidecar{}", std::env::consts::EXE_SUFFIX));
-    assert!(
-        program.exists(),
-        "{} is missing: run `cargo test` (it builds examples) or `cargo build --example fake_sidecar`",
-        program.display()
-    );
-    program
-}
-
-fn timeouts() -> Timeouts {
-    Timeouts {
-        handshake: Duration::from_secs(5),
-        ping: Duration::from_secs(5),
-        open: Duration::from_secs(5),
-        close: Duration::from_secs(5),
-        save: Duration::from_secs(5),
-        save_all: Duration::from_secs(5),
-        shutdown_grace: Duration::from_secs(2),
-    }
-}
-
-fn service_with(envs: &[(&str, &str)], timeouts: Timeouts) -> SidecarService {
-    let mut command = SidecarCommand::stdio(fake_program());
-    command.envs = envs
-        .iter()
-        .map(|(k, v)| ((*k).into(), (*v).into()))
-        .collect();
-    SidecarService::new(SidecarConfig { command, timeouts })
-}
-
-fn service() -> SidecarService {
-    service_with(&[], timeouts())
-}
 
 #[cfg(unix)]
 fn process_exists(pid: u32) -> bool {
@@ -225,6 +184,31 @@ async fn sidecar_errors_pass_through_with_their_codes() {
     assert_eq!(service.current_process().await.unwrap().0, 1);
     // 打开失败不会留下句柄
     assert_eq!(service.open_handles(), 1);
+}
+
+#[tokio::test]
+async fn handles_and_attachments_can_be_checked_without_asking_the_sidecar() {
+    let service = service();
+    assert_eq!(
+        service.ensure_open(DocHandle(1)).unwrap_err(),
+        SidecarError::UnknownHandle
+    );
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+    assert!(service.ensure_open(a).is_ok());
+    // 假 sidecar 的文档没有附件列表：附件名查不到，按 attachment_not_found 处理
+    assert_eq!(
+        service.attachment_file_name(a, "x").unwrap_err().code(),
+        "attachment_not_found"
+    );
+    service.close_document(a).await.unwrap();
+    assert_eq!(
+        service.ensure_open(a).unwrap_err(),
+        SidecarError::UnknownHandle
+    );
+    assert_eq!(
+        service.attachment_file_name(a, "x").unwrap_err(),
+        SidecarError::UnknownHandle
+    );
 }
 
 #[tokio::test]

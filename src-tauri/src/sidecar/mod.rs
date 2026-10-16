@@ -19,6 +19,8 @@ mod protocol;
 mod service;
 
 #[cfg(test)]
+pub(crate) mod testing;
+#[cfg(test)]
 mod tests;
 
 pub use connection::SidecarCommand;

@@ -92,7 +92,13 @@ impl SidecarService {
             .open(&conn, method::EMAIL_OPEN, json!({ "path": path_text }))
             .await?;
         let handle = self.new_handle();
-        let entry = DocEntry::new(handle, Source::File(path), conn.generation(), opened.doc_id);
+        let entry = DocEntry::new(
+            handle,
+            Source::File(path),
+            conn.generation(),
+            opened.doc_id,
+            &opened.document,
+        );
         self.inner.documents.lock().unwrap().insert(handle, entry);
         Ok(OpenedDocument {
             handle,
@@ -123,7 +129,13 @@ impl SidecarService {
             parent: parent_entry,
             attachment_id: attachment_id.to_owned(),
         };
-        let entry = DocEntry::new(handle, source, conn.generation(), opened.doc_id);
+        let entry = DocEntry::new(
+            handle,
+            source,
+            conn.generation(),
+            opened.doc_id,
+            &opened.document,
+        );
         self.inner.documents.lock().unwrap().insert(handle, entry);
         Ok(OpenedDocument {
             handle,
@@ -145,6 +157,31 @@ impl SidecarService {
             .ok_or(SidecarError::UnknownHandle)?;
         entry.closed_by_user.store(true, Ordering::SeqCst);
         self.finalize(entry).await
+    }
+
+    /// 句柄是否存在（没有关闭）。不会访问 sidecar。弹出对话框之前先用它确认，避免为无效的句柄打扰用户。
+    pub fn ensure_open(&self, handle: DocHandle) -> Result<()> {
+        self.entry(handle).map(|_| ())
+    }
+
+    /// 附件在文档里的文件名，用作保存对话框的默认文件名。句柄不存在或文档里没有这个附件时返回错误，
+    /// 这样不必先弹出对话框。附件没有文件名时返回 `Ok(None)`。不会访问 sidecar。
+    pub fn attachment_file_name(
+        &self,
+        handle: DocHandle,
+        attachment_id: &str,
+    ) -> Result<Option<String>> {
+        let entry = self.entry(handle)?;
+        entry
+            .attachment_names
+            .get(attachment_id)
+            .cloned()
+            .ok_or_else(|| {
+                SidecarError::remote(
+                    code::ATTACHMENT_NOT_FOUND,
+                    format!("the document has no attachment \"{attachment_id}\""),
+                )
+            })
     }
 
     /// 把附件保存到用户在保存对话框里选的路径。

@@ -48,6 +48,8 @@ pub mod code {
     pub const SIDECAR_UNAVAILABLE: &str = "sidecar_unavailable";
     /// 文档句柄不存在：已经关闭，或者从未发出。
     pub const UNKNOWN_HANDLE: &str = "unknown_handle";
+    /// 系统对话框（打开、保存、选择文件夹）没有正常返回。
+    pub const DIALOG_FAILED: &str = "dialog_failed";
     /// sidecar 的响应不符合协议。
     pub const PROTOCOL_ERROR: &str = "protocol_error";
 }
@@ -150,6 +152,18 @@ impl SidecarError {
         }
     }
 
+    /// 交给前端的错误码（design.md D11）：只用 sidecar 的错误码，加上 `sidecar_crashed`、`timeout`、`dialog_failed`。
+    /// 句柄不存在对前端来说就是文档不存在；sidecar 无法启动按“解析进程崩溃”处理（`message` 里有具体原因）；
+    /// 响应不符合协议是 sidecar 的 bug，按 `internal_error`。
+    pub fn wire_code(&self) -> &str {
+        match self {
+            Self::Unavailable { .. } => code::SIDECAR_CRASHED,
+            Self::UnknownHandle => code::DOCUMENT_NOT_FOUND,
+            Self::Protocol { .. } => code::INTERNAL_ERROR,
+            other => other.code(),
+        }
+    }
+
     /// 给开发者看的说明，不要直接显示给用户。
     pub fn message(&self) -> String {
         match self {
@@ -184,7 +198,7 @@ impl Serialize for SidecarError {
             message: String,
         }
         Wire {
-            code: self.code(),
+            code: self.wire_code(),
             message: self.message(),
         }
         .serialize(serializer)
@@ -352,6 +366,52 @@ mod tests {
             .code(),
             "protocol_error"
         );
+    }
+
+    #[test]
+    fn the_wire_format_only_uses_the_codes_the_frontend_knows() {
+        let wire = |e: SidecarError| {
+            serde_json::to_value(&e).unwrap()["code"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        assert_eq!(wire(SidecarError::UnknownHandle), "document_not_found");
+        assert_eq!(
+            wire(SidecarError::Unavailable {
+                message: "no binary".into()
+            }),
+            "sidecar_crashed"
+        );
+        assert_eq!(
+            wire(SidecarError::Protocol {
+                message: "bad".into()
+            }),
+            "internal_error"
+        );
+        assert_eq!(
+            wire(SidecarError::Crashed {
+                message: "x".into()
+            }),
+            "sidecar_crashed"
+        );
+        assert_eq!(
+            wire(SidecarError::Timeout {
+                method: "email.open".into(),
+                after: Duration::from_secs(1)
+            }),
+            "timeout"
+        );
+        assert_eq!(
+            wire(SidecarError::remote(code::DIALOG_FAILED, "x")),
+            "dialog_failed"
+        );
+        assert_eq!(
+            wire(SidecarError::remote(code::WRITE_FAILED, "x")),
+            "write_failed"
+        );
+        // 内部判断仍然能区分它们
+        assert_eq!(SidecarError::UnknownHandle.code(), "unknown_handle");
     }
 
     #[test]
