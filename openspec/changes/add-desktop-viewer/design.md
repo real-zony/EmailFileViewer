@@ -73,6 +73,15 @@
 - NativeAOT 的好处：体积小、启动快（打开邮件要秒开）；macOS 上不需要 JIT 相关的 entitlements，公证更简单。
 - MsgReader 依赖 RtfPipe、OpenMcdf、Microsoft.Maui.Graphics，是否兼容 AOT 未经验证，**第一个任务就是做实验**：开启 `IsAotCompatible` 和裁剪分析，在三个平台上发布 AOT 版本，并用样本邮件跑通。
 - 退路：用自包含、单文件、开启裁剪的普通发布（JIT）。代价是体积更大，macOS 上需要为 sidecar 配置 JIT 相关的 entitlements。
+- **实验结论（任务 1.4）：采用 NativeAOT。** 依据：
+  - smoke 走到的代码路径上，build 和 publish 都是 0 条 IL/AOT/裁剪警告。
+  - CI 在 win-x64、linux-x64、osx-arm64、osx-x64 四个平台上都完成了测试、AOT 发布和 smoke；Linux 产物经 `ldd` 和 `LD_DEBUG` 确认不依赖 libicu。
+  - sidecar 体积：macOS arm64 未压缩约 6.2 MB；四个平台打包后（zip）约 2.9–4.4 MB。
+- **已知的 AOT 警告**（对 MimeKit、MsgReader、OpenMcdf、RtfPipe 做全量分析得到，细节见 `core/docs/aot-spike.md`）：
+  - RtfPipe `ControlTag.Negate`：IL2075 和 IL3050 各 1 条，任务 3.3 调用 RtfPipe 时会出现。实测 `\b0`、`\i0` 等输出正确，接受。
+  - MimeKit 默认 S/MIME 上下文：IL2026。任务 3.7 只按 MIME 类型识别签名和加密，**不要创建 S/MIME 上下文**，以避开这条路径。
+  - MsgReader 的 Reactions JSON 和 `MailMessage.WriteTo` 反射：我们不调用，不受影响。
+  - 之后每组任务若新增其他 IL/AOT 警告，需要在审核时逐条确认。
 - 不论哪种方式，sidecar 都以 Tauri `externalBin` 的方式打包，文件名带目标三元组；macOS 通用版本用 `lipo` 把两个架构的 sidecar 合并成一个。
 
 ### D4. 解析核心：规范化的 EmailDocument 模型

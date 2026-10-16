@@ -4,8 +4,8 @@
 
 - [x] 1.1 在 `core/` 下创建 `EmailFileViewer.sln`，包含 `src/EmailFileViewer.Core`、`src/EmailFileViewer.Sidecar`、`tests/EmailFileViewer.Core.Tests` 三个 net10.0 项目；验证 `dotnet build core` 和 `dotnet test core` 均通过
 - [x] 1.2 Core 引入 MimeKit 和 MsgReader，Sidecar 开启 `IsAotCompatible`、`PublishAot` 和裁剪分析；实现 `--smoke <dir>` 命令（逐个解析目录中的文件，输出主题和附件数，任一文件失败时以非零码退出），先用从 MimeKit/MsgReader 测试集取来的少量样本跑通；验证在 macOS arm64 上 `dotnet publish -r osx-arm64` 成功、smoke 命令通过，并把全部 IL/AOT 警告记录下来
-- [ ] 1.3 新增 `.github/workflows/core.yml`：在 windows-latest、ubuntu-22.04、macos-latest、macos-15-intel 上执行测试、发布 sidecar、运行 smoke；验证四个平台的任务全部通过
-- [ ] 1.4 根据 1.2 和 1.3 的结果决定使用 NativeAOT 还是自包含 JIT 发布，把结论和依据补进 design.md 的 D3；验证 `core.yml` 使用的是选定的发布方式且通过
+- [x] 1.3 新增 `.github/workflows/core.yml`：在 windows-latest、ubuntu-22.04、macos-latest、macos-15-intel 上执行测试、发布 sidecar、运行 smoke；验证四个平台的任务全部通过
+- [x] 1.4 根据 1.2 和 1.3 的结果决定使用 NativeAOT 还是自包含 JIT 发布，把结论和依据补进 design.md 的 D3；验证 `core.yml` 使用的是选定的发布方式且通过
 
 ## 2. 样本邮件库
 
