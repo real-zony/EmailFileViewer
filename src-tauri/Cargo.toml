@@ -1,0 +1,19 @@
+[package]
+name = "emailfileviewer"
+version = "0.1.0"
+description = "Desktop viewer for .eml and .msg email files"
+authors = ["real-zony"]
+license = "MIT"
+repository = "https://github.com/real-zony/EmailFileViewer"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "emailfileviewer_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
