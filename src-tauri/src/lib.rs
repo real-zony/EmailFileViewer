@@ -1,8 +1,10 @@
 mod settings;
+pub mod sidecar;
 
 use settings::{InitialSettings, ResolvedMode, SETTINGS_FILE, WindowColors};
+use sidecar::{SidecarConfig, SidecarService};
 use tauri::window::Color;
-use tauri::{Theme, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, RunEvent, Theme, WebviewUrl, WebviewWindowBuilder};
 
 // 主窗口的属性，与原来 tauri.conf.json 中的定义一致
 const MAIN_WINDOW_LABEL: &str = "main";
@@ -80,8 +82,16 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
             create_main_window(app)?;
+            // sidecar 在第一次请求时才启动（5.4 的命令通过 State 使用它），这里只登记
+            app.manage(SidecarService::new(SidecarConfig::bundled()?));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // 退出时关闭 sidecar 的 stdin，等它自己清理并退出，等不到再强制结束；没启动过则什么也不做
+            if let RunEvent::Exit = event {
+                app.state::<SidecarService>().shutdown_blocking();
+            }
+        });
 }

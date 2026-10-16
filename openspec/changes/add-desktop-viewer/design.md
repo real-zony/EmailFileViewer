@@ -204,6 +204,46 @@
 - 签名：macOS 的 Developer ID 证书和公证凭据放在 GitHub Secrets，由 `tauri-action` 完成签名和公证；CI 中额外用 `codesign -dv` 检查 sidecar 是否也已签名。Windows 通过 Tauri 的自定义 `signCommand` 接入云签名服务（Certum 或 SignPath，见待定问题）。
 - 普通的推送和 PR 只跑构建和测试，不签名、不发布。
 
+### D11. 前端与 Rust 的接口
+
+前端只认 Rust 分配的**文档句柄**（整数），不接触 sidecar 的 docId，也**从不向 Rust 传入文件路径**。所有打开文件的来源（对话框、拖放、启动参数、单实例转发）都由 Rust 处理，结果以事件的形式通知前端。
+
+```
+ sources (Rust)                         Rust -> UI events
+ +--------------------+                 +-------------------------------+
+ | open dialog        |                 | efv://document-opened         |
+ | drag-drop (window) | --> open batch  | efv://document-open-failed    |
+ | argv at startup    |     (batchId)   | efv://open-batch-finished     |
+ | single-instance    |                 +-------------------------------+
+ +--------------------+
+```
+
+**命令**（`invoke`）。出错时抛出 `{ code, message }`：
+
+| 命令 | 参数 | 返回 |
+|------|------|------|
+| `app_ready` | — | `void`：前端注册好事件监听后调用；在此之前 Rust 把启动参数和单实例转来的文件先排队 |
+| `open_with_dialog` | — | `void`：弹出多选对话框，结果通过事件返回；用户取消时不发任何事件 |
+| `open_nested` | `handle, attachmentId` | `{ handle, document }`：在当前标签页内逐层进入 |
+| `close_document` | `handle` | `void` |
+| `save_attachment` | `handle, attachmentId` | `{ path } \| null`：Rust 弹出保存对话框，默认文件名是清理后的附件名；取消时返回 null |
+| `save_all_attachments` | `handle` | `{ saved: [{attachmentId, path}], failed: [{attachmentId, code}] } \| null`：Rust 弹出选择文件夹的对话框 |
+| `open_attachment` | `handle, attachmentId` | `void`：可执行类型抛出 `executable_refused` |
+
+**事件**（`listen`）：
+
+| 事件 | 内容 |
+|------|------|
+| `efv://document-opened` | `{ batchId, handle, fileName, document }` |
+| `efv://document-open-failed` | `{ batchId, fileName, code, message }` |
+| `efv://open-batch-finished` | `{ batchId, opened, failed }`，用于多文件部分失败时的汇总通知 |
+
+**其他约定**：
+- `document` 的结构与 sidecar 协议中的 `EmailDocument` 完全一致（camelCase），以 `core/docs/sidecar-protocol.md` 为准。
+- 错误码沿用 sidecar 的错误码，另外增加：`sidecar_crashed`（解析进程崩溃，前端按"文件已损坏或无法解析"显示）、`timeout`、`dialog_failed`。
+- 拖放遮罩：前端通过 `getCurrentWebview().onDragDropEvent` 的 enter、over、leave 显示遮罩和文件数量。真正的打开由 Rust 在窗口的拖放事件中处理，前端收到 drop 时只需隐藏遮罩。
+- 外部链接：由 5.7 的新窗口拦截处理，前端不需要命令。
+
 ## Risks / Trade-offs
 
 - [MsgReader 或 MimeKit 不兼容 AOT] → 按 D3 退回自包含的 JIT 发布，并补上 macOS entitlements；把这个实验排在第一个任务。
