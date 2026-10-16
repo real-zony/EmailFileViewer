@@ -8,6 +8,13 @@
   <ItemGroup>
     <PackageReference Include="MimeKit" />
     <PackageReference Include="MsgReader" />
+    <PackageReference Include="RtfPipe" />
+    <PackageReference Include="UTF.Unknown" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 格式识别、字符集判断等内部逻辑直接用字节数组做单元测试 -->
+    <InternalsVisibleTo Include="EmailFileViewer.Core.Tests" />
   </ItemGroup>
 
 </Project>

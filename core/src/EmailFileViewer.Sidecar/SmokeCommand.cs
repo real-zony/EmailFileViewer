@@ -1,4 +1,6 @@
+using System.Text.Json;
 using EmailFileViewer.Core;
+using EmailFileViewer.Core.Json;
 
 namespace EmailFileViewer.Sidecar;
 
@@ -13,7 +15,9 @@ public static class SmokeCommand
     /// 解析目录（不递归）下所有扩展名为 .eml 或 .msg 的文件。
     /// </summary>
     /// <remarks>
-    /// 每个成功的文件向 <paramref name="output"/> 写一行 <c>文件名\t主题\t附件数</c>；失败的文件向 <paramref name="error"/> 写错误信息。
+    /// 每个成功的文件向 <paramref name="output"/> 写一行 <c>文件名\t主题\t正文来源格式\t附件数</c>；失败的文件向 <paramref name="error"/> 写错误信息。
+    /// 附件数是解析库报告的原始数量，附件列表实现之前先这样输出。
+    /// 解析成功后还会把邮件文档序列化成 JSON（结果丢弃），用来验证原生发布后 JSON 序列化也能工作。
     /// </remarks>
     /// <param name="directory">样本目录。</param>
     /// <param name="output">标准输出。</param>
@@ -50,8 +54,21 @@ public static class SmokeCommand
             var fileName = Path.GetFileName(file);
             try
             {
-                var summary = await EmailSummaryReader.ReadAsync(file, cancellationToken);
-                await output.WriteLineAsync($"{fileName}\t{ToSingleLine(summary.Subject)}\t{summary.AttachmentCount}");
+                using var parsed = await EmailParser.ParseFileAsync(file, cancellationToken);
+                var document = parsed.Document;
+                var json = JsonSerializer.Serialize(document, EmailJsonContext.Default.EmailDocument);
+                if (json.Length == 0)
+                {
+                    throw new InvalidOperationException("邮件文档序列化后为空。");
+                }
+
+                await output.WriteLineAsync(
+                    $"{fileName}\t{ToSingleLine(document.Subject ?? string.Empty)}\t{document.Body.SourceFormat}\t{parsed.RawAttachmentCount}");
+            }
+            catch (EmailParseException ex)
+            {
+                failedCount++;
+                await error.WriteLineAsync($"ERROR\t{fileName}\t{ex.Kind}: {ToSingleLine(ex.Message)}");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

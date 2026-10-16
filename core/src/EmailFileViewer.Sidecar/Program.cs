@@ -1,8 +1,6 @@
 using System.Text;
 using EmailFileViewer.Sidecar;
 
-// 注册后才能识别 GBK、Big5 等非 Unicode 字符集
-Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
 using var cts = new CancellationTokenSource();
