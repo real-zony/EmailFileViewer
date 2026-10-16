@@ -102,7 +102,7 @@ internal static class SpecialSamples
         Verification.Require(decrypted.Text.StartsWith("SECRET-BODY", StringComparison.Ordinal), "smime-encrypted.eml 解密后的正文");
     }
 
-    private static X509Certificate2 CreateSelfSignedCertificate(string email)
+    internal static X509Certificate2 CreateSelfSignedCertificate(string email)
     {
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest($"CN=EFV Sample Signer, E={email}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);

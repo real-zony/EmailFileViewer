@@ -203,4 +203,77 @@ public class CharsetDecodingTests
         Assert.Contains(oldText, text);
         return Encoding.Latin1.GetBytes(text.Replace(oldText, newText, StringComparison.Ordinal));
     }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 字符集解码 / 邮件头直接写 GBK 字节（没有 RFC 2047）")]
+    public async Task RawGbkHeaders_AreDecodedUsingTheBodyCharset()
+    {
+        using var parsed = await MailAssert.ParseSampleAsync("charset-gbk-raw-header.eml");
+        var document = parsed.Document;
+
+        Assert.Equal("老邮件：邮件头直接写 GBK 字节", document.Subject);
+        MailAssert.AddressesEqual(document.From, ("李四", "li.si@example.com"));
+        MailAssert.AddressesEqual(document.To, ("Alice Zhang", "alice.zhang@example.com"));
+        Assert.Equal(
+            "您好，\n\n"
+            + "这封邮件的主题和发件人名称没有经过 RFC 2047 编码，而是直接写入了 GBK 字节，"
+            + "很多十几年前的中文邮件客户端就是这样发信的。\n\n"
+            + "正文声明了 charset=gb2312，邮件头需要参考它来解码。\n",
+            MailAssert.PlainTextOf(document));
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 字符集解码 / 邮件头直接写 KOI8-R 字节（没有 RFC 2047）")]
+    public async Task RawKoi8RHeader_IsDecodedUsingTheBodyCharset()
+    {
+        using var parsed = await MailAssert.ParseSampleAsync("charset-koi8-r-raw-header.eml");
+
+        Assert.Equal("Откуда он появился?", parsed.Document.Subject);
+        Assert.Equal("Откуда он появился?\n", MailAssert.PlainTextOf(parsed.Document));
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 字符集解码 / 邮件头直接写 GBK 字节，正文也没有声明字符集时根据邮件头的字节识别")]
+    public async Task RawGbkHeaders_WithoutBodyCharset_AreDetectedFromTheHeaderBytes()
+    {
+        var bytes = File.ReadAllBytes(SampleFiles.GetPath("charset-gbk-raw-header.eml"));
+        var relabeled = Replace(bytes, "Content-Type: text/plain; charset=\"gb2312\"", "Content-Type: text/plain");
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("raw-header-no-charset.eml", relabeled);
+
+        using var parsed = await EmailParser.ParseFileAsync(path);
+
+        Assert.Equal("老邮件：邮件头直接写 GBK 字节", parsed.Document.Subject);
+        MailAssert.AddressesEqual(parsed.Document.From, ("李四", "li.si@example.com"));
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 字符集解码 / 邮件头直接写 UTF-8 字节时不受影响")]
+    public async Task RawUtf8Headers_AreStillDecodedAsUtf8()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteMail("raw-utf8.eml", "From: 张三 <a@example.com>\nSubject: 中文主题 résumé\nContent-Type: text/plain; charset=gbk\n\nbody\n");
+
+        using var parsed = await EmailParser.ParseFileAsync(path);
+
+        Assert.Equal("中文主题 résumé", parsed.Document.Subject);
+        MailAssert.AddressesEqual(parsed.Document.From, ("张三", "a@example.com"));
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 字符集解码 / 嵌套邮件里的 8 位原始邮件头同样处理")]
+    public async Task RawHeadersInsideAttachedEmail_AreDecodedWhenOpened()
+    {
+        var inner = File.ReadAllBytes(SampleFiles.GetPath("charset-gbk-raw-header.eml"));
+        var outer = Encoding.ASCII.GetBytes(
+            "From: outer@example.com\r\nSubject: outer\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"b\"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nhello\r\n--b\r\nContent-Type: application/octet-stream; name=\"inner.eml\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+            + Convert.ToBase64String(inner, Base64FormattingOptions.InsertLineBreaks).ReplaceLineEndings("\r\n")
+            + "\r\n--b--\r\n");
+        using var temp = new TempDirectory();
+        using var parsed = await EmailParser.ParseFileAsync(temp.WriteBytes("outer.eml", outer));
+
+        using var nested = await parsed.OpenNestedEmailAsync(Assert.Single(parsed.Document.Attachments).Id);
+
+        Assert.Equal("老邮件：邮件头直接写 GBK 字节", nested.Document.Subject);
+    }
 }

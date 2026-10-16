@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="MimeKit" />
     <PackageReference Include="MsgReader" />
+    <PackageReference Include="OpenMcdf" />
     <PackageReference Include="RtfPipe" />
     <PackageReference Include="UTF.Unknown" />
   </ItemGroup>

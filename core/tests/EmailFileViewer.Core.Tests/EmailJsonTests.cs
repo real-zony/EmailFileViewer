@@ -83,4 +83,37 @@ public class EmailJsonTests
 
         Assert.Equal("2026-10-05T16:00:00.123Z", json.RootElement.GetProperty("sentAtUtc").GetString());
     }
+
+    [Fact]
+    [Trait("Scenario", "email-attachments / 列出附件 / JSON 中的附件元数据")]
+    public async Task Attachments_AreWrittenWithIdNameSizeTypeAndNestedFlag()
+    {
+        using var parsed = await MailAssert.ParseSampleAsync("attachment-eml-file.eml");
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(parsed.Document, EmailJsonContext.Default.EmailDocument));
+        var attachments = json.RootElement.GetProperty("attachments");
+
+        Assert.Equal(2, attachments.GetArrayLength());
+        var first = attachments[0];
+        Assert.Equal("2", first.GetProperty("id").GetString());
+        Assert.Equal("forwarded-as-file.eml", first.GetProperty("fileName").GetString());
+        Assert.Equal(352, first.GetProperty("size").GetInt64());
+        Assert.Equal("application/octet-stream", first.GetProperty("mimeType").GetString());
+        Assert.True(first.GetProperty("isNestedEmail").GetBoolean());
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 加密与签名邮件提示 / JSON 中的签名、加密和远程内容标志")]
+    public async Task Flags_AreWrittenAsBooleans()
+    {
+        using var signed = await MailAssert.ParseSampleAsync("smime-signed.eml");
+        using var marketing = await MailAssert.ParseSampleAsync("marketing-remote-content.eml");
+
+        using var signedJson = JsonDocument.Parse(JsonSerializer.Serialize(signed.Document, EmailJsonContext.Default.EmailDocument));
+        using var marketingJson = JsonDocument.Parse(JsonSerializer.Serialize(marketing.Document, EmailJsonContext.Default.EmailDocument));
+
+        Assert.True(signedJson.RootElement.GetProperty("isSigned").GetBoolean());
+        Assert.False(signedJson.RootElement.GetProperty("isEncrypted").GetBoolean());
+        Assert.True(marketingJson.RootElement.GetProperty("hasRemoteContent").GetBoolean());
+    }
 }

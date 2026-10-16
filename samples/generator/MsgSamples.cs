@@ -15,6 +15,10 @@ internal static class MsgSamples
 
     public const string RtfOnlyMarker = "RTF-ONLY-BODY";
 
+    /// <summary>RTF 正文里那句中文“中文段落。”的 <c>\uN?</c> 写法，转换成 HTML 后应当还原成这几个汉字。</summary>
+    public const string RtfOnlyChineseEscapes = @"\u20013?\u25991?\u27573?\u33853?\u12290?";
+
+
     public const string HtmlInRtfFileName = "body-html-in-rtf.msg";
 
     public const string HtmlInRtfMarker = "HTML-IN-RTF-BODY";
@@ -146,7 +150,7 @@ internal static class MsgSamples
         {\rtf1\ansi\ansicpg1252\deff0\nouicompat{\fonttbl{\f0\fswiss\fcharset0 Arial;}{\f1\fmodern\fcharset0 Courier New;}}{\colortbl ;\red192\green0\blue0;\red0\green112\blue192;}
         \viewkind4\uc1\pard\sa180\sl276\slmult1\f0\fs22\b RTF-ONLY-BODY\b0\par
         This message has only an RTF body: \b bold\b0 , \i italic\i0 , \ul underlined\ulnone  and \cf1 red\cf0  text.\par
-        Second paragraph after a paragraph break. Chinese text:  3?▙1?❗3?㎅3?ሩ0?\par
+        Second paragraph after a paragraph break. Chinese text: \u20013?\u25991?\u27573?\u33853?\u12290?\par
         \pard\fi-360\li720\sa60\bullet\tab First bullet item\par
         \pard\fi-360\li720\sa60\bullet\tab Second bullet item\par
         \pard\sa180\f1 Monospace line in Courier New\f0\par

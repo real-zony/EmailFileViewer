@@ -1,0 +1,13 @@
+From: 李四 <li.si@example.com>
+To: Alice Zhang <alice.zhang@example.com>
+Subject: 老邮件：邮件头直接写 GBK 字节
+Date: Thu, 1 Oct 2026 10:30:00 +0800
+Message-Id: <charset-gbk-raw-header@samples.efv.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="gb2312"
+Content-Transfer-Encoding: base64
+
+xPq6w6OsDQoNCtXit+LTyrz+tcTW98zius23orz+yMvD+7PGw7vT0L6tuf0gUkZDIDIwNDcgseDC
+66OstvjKx9axvdPQtMjrwcsgR0JLINfWvdqjrLrctuDKrry4xOrHsLXE1tDOxNPKvP6/zbuntsu+
+zcrH1eLR+bei0MW1xKGjDQoNCtX9zsTJ+cP3wcsgY2hhcnNldD1nYjIzMTKjrNPKvP7Nt9Do0qqy
+zr+8y/zAtL3iwuuhow0K

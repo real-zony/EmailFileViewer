@@ -10,15 +10,40 @@ namespace EmailFileViewer.Core.Parsing;
 internal static class MimeEmailMapper
 {
     /// <summary>
-    /// 映射邮件头和正文。
+    /// 映射邮件头、正文和附件。
     /// </summary>
     /// <param name="message">MimeKit 解析出的邮件。</param>
-    /// <returns>邮件文档。</returns>
-    internal static EmailDocument Map(MimeMessage message)
+    /// <returns>邮件文档，以及文档里列出的附件的来源。</returns>
+    internal static MappedEmail Map(MimeMessage message)
     {
         var dateHeaderRaw = NullIfBlank(message.Headers[HeaderId.Date]);
 
-        return new EmailDocument
+        var htmlPart = FindTextPart(message.Body, TextFormat.Html);
+        var rtfPart = FindTextPart(message.Body, TextFormat.RichText);
+        var plainPart = FindTextPart(message.Body, TextFormat.Plain);
+        var bodyParts = new HashSet<MimeEntity>(ReferenceEqualityComparer.Instance);
+        foreach (var part in new[] { htmlPart, rtfPart, plainPart })
+        {
+            if (part is not null)
+            {
+                bodyParts.Add(part);
+            }
+        }
+
+        var smime = SmimeDetector.Detect(message.Body);
+        var (sources, candidates) = MimeAttachmentCollector.Collect(message.Body, bodyParts, smime.Carrier);
+        var resolver = new InlineResourceResolver(candidates);
+
+        var body = EmailBodyBuilder.Build(
+            () => htmlPart is null ? null : TextPartDecoder.GetText(htmlPart),
+            () => rtfPart is null ? null : TextPartDecoder.GetText(rtfPart),
+            () => plainPart is null ? null : TextPartDecoder.GetText(plainPart),
+            resolver);
+
+        // 正文通过 cid: 引用了的内嵌图片不再列为附件；要在正文处理完之后才知道哪些被引用
+        var listed = sources.Where(source => !source.IsInlineConsumed).ToList();
+
+        var document = new EmailDocument
         {
             From = MapAddresses(message.From),
             To = MapAddresses(message.To),
@@ -28,11 +53,14 @@ internal static class MimeEmailMapper
             Subject = NullIfBlank(message.Subject),
             SentAtUtc = GetSentAtUtc(message, dateHeaderRaw),
             DateHeaderRaw = dateHeaderRaw,
-            Body = EmailBodyBuilder.Build(
-                () => GetBodyText(message, TextFormat.Html),
-                () => GetBodyText(message, TextFormat.RichText),
-                () => GetBodyText(message, TextFormat.Plain)),
+            Body = body.Body,
+            Attachments = listed.Select(source => source.ToModel()).ToList(),
+            IsSigned = smime.IsSigned,
+            IsEncrypted = smime.IsEncrypted,
+            HasRemoteContent = body.HasRemoteContent,
         };
+
+        return new MappedEmail(document, listed.ToDictionary(source => source.Id));
     }
 
     // MimeKit 在 Date 头缺失或无法解析时返回 DateTimeOffset.MinValue

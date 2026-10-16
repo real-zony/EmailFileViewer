@@ -74,9 +74,21 @@ internal static class CharsetSamples
         + "Expected sender name: 李 Li 明 (Ming)\n"
         + "Expected first recipient name: Müller 先生\n";
 
+    // 8 位原始邮件头样本：主题和发件人名称直接写 GBK 字节，没有 RFC 2047 编码字；正文声明 gb2312
+    public const string GbkRawHeaderSubject = "老邮件：邮件头直接写 GBK 字节";
+
+    public const string GbkRawHeaderFromName = "李四";
+
+    public const string GbkRawHeaderBody =
+        "您好，\n\n"
+        + "这封邮件的主题和发件人名称没有经过 RFC 2047 编码，而是直接写入了 GBK 字节，"
+        + "很多十几年前的中文邮件客户端就是这样发信的。\n\n"
+        + "正文声明了 charset=gb2312，邮件头需要参考它来解码。\n";
+
     public static void WriteAll(SampleOutput output)
     {
         output.Write("charset-gbk.eml", BuildGbk());
+        output.Write("charset-gbk-raw-header.eml", BuildGbkRawHeader());
         output.Write("charset-gb18030.eml", BuildGb18030());
         output.Write("charset-big5-undeclared.eml", BuildBig5Undeclared());
         output.Write("charset-iso-2022-jp.eml", BuildIsoJp());
@@ -98,6 +110,24 @@ internal static class CharsetSamples
             .Header("Content-Transfer-Encoding", "base64")
             .EndHeaders();
         mail.Base64Body(Encode("gbk", GbkBody));
+        return mail.ToArray();
+    }
+
+    // 邮件头里直接写 GBK 字节（没有 RFC 2047）：只有 ASCII 以外的 From 名称和 Subject；正文 gb2312 + base64
+    private static byte[] BuildGbkRawHeader()
+    {
+        var gbk = Encoding.GetEncoding("gbk", EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
+        var mail = new RawMail()
+            .RawHeader("From", [.. gbk.GetBytes(GbkRawHeaderFromName), .. " <li.si@example.com>"u8])
+            .Header("To", "Alice Zhang <alice.zhang@example.com>")
+            .RawHeader("Subject", gbk.GetBytes(GbkRawHeaderSubject))
+            .Header("Date", "Thu, 1 Oct 2026 10:30:00 +0800")
+            .Header("Message-Id", "<charset-gbk-raw-header@samples.efv.invalid>")
+            .Header("MIME-Version", "1.0")
+            .Header("Content-Type", "text/plain; charset=\"gb2312\"")
+            .Header("Content-Transfer-Encoding", "base64")
+            .EndHeaders();
+        mail.Base64Body(Encode("gb2312", GbkRawHeaderBody));
         return mail.ToArray();
     }
 

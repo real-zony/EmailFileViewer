@@ -39,6 +39,16 @@ internal static class Verification
         RequireEqual(CharsetSamples.GbkBody, NormalizeNewLines(gbk.TextBody), "charset-gbk.eml 的正文");
         Require(string.Equals(BodyAsText(gbk).ContentType.Charset, "gbk", StringComparison.OrdinalIgnoreCase), "charset-gbk.eml 声明了 charset=gbk");
 
+        // 8 位原始邮件头：文件里必须真的是 GBK 字节、没有编码字（MimeKit 默认选项解不对，由 Core 负责识别）
+        var rawHeaderBytes = File.ReadAllBytes(Path.Combine(root, "charset-gbk-raw-header.eml"));
+        var gbkEncoding = Encoding.GetEncoding("gbk");
+        Require(rawHeaderBytes.AsSpan().IndexOf(gbkEncoding.GetBytes(CharsetSamples.GbkRawHeaderSubject)) >= 0, "charset-gbk-raw-header.eml 的主题是原始 GBK 字节");
+        Require(rawHeaderBytes.AsSpan().IndexOf(gbkEncoding.GetBytes(CharsetSamples.GbkRawHeaderFromName)) >= 0, "charset-gbk-raw-header.eml 的发件人名称是原始 GBK 字节");
+        Require(!Encoding.Latin1.GetString(rawHeaderBytes).Contains("=?", StringComparison.Ordinal), "charset-gbk-raw-header.eml 没有 RFC 2047 编码字");
+        var rawHeaderMessage = LoadEml(root, "charset-gbk-raw-header.eml");
+        RequireEqual(CharsetSamples.GbkRawHeaderBody, NormalizeNewLines(rawHeaderMessage.TextBody), "charset-gbk-raw-header.eml 的正文");
+        Require(string.Equals(BodyAsText(rawHeaderMessage).ContentType.Charset, "gb2312", StringComparison.OrdinalIgnoreCase), "charset-gbk-raw-header.eml 声明了 charset=gb2312");
+
         var gb18030 = LoadEml(root, "charset-gb18030.eml");
         RequireEqual(CharsetSamples.Gb18030Subject, gb18030.Subject, "charset-gb18030.eml 的主题");
         RequireEqual(CharsetSamples.Gb18030Body, NormalizeNewLines(gb18030.TextBody), "charset-gb18030.eml 的正文");
@@ -162,6 +172,7 @@ internal static class Verification
         {
             Require(string.IsNullOrEmpty(rtfOnly.BodyText) && string.IsNullOrEmpty(rtfOnly.BodyHtml), "body-rtf-only.msg 读出来没有文本和 HTML 正文");
             Require(rtfOnly.BodyRtf is not null && rtfOnly.BodyRtf.Contains(MsgSamples.RtfOnlyMarker, StringComparison.Ordinal) && !rtfOnly.BodyRtf.Contains("\\fromhtml", StringComparison.Ordinal), "body-rtf-only.msg 的 RTF 正文不是 HTML 封装");
+            Require(rtfOnly.BodyRtf!.Contains(MsgSamples.RtfOnlyChineseEscapes, StringComparison.Ordinal), "body-rtf-only.msg 的 RTF 里有正确的 \\uN? 中文转义（中文段落。）");
         }
 
         var htmlInRtfPath = Path.Combine(root, MsgSamples.HtmlInRtfFileName);

@@ -83,6 +83,43 @@ internal static class EmailFormatDetector
     }
 
     /// <summary>
+    /// 计算应该从文件的哪个位置开始交给 MimeKit 解析：跳过开头的 UTF-8 BOM 和空行。
+    /// </summary>
+    /// <remarks>
+    /// MimeKit 把开头的空行当成邮件头已经结束，整封邮件会被当成正文；UTF-8 BOM 会粘在第一个邮件头的名字上。
+    /// 所以这两样都要先跳过。
+    /// </remarks>
+    /// <param name="header">文件开头的字节，最多看 <see cref="SniffLength"/> 个。</param>
+    /// <returns>起始偏移量；开头没有需要跳过的内容或者前 <see cref="SniffLength"/> 个字节里没有非空行时，返回 BOM 的长度或 0。</returns>
+    internal static int GetMimeStartOffset(ReadOnlySpan<byte> header)
+    {
+        var window = header.Length > SniffLength ? header[..SniffLength] : header;
+        var bomLength = window.StartsWith(Utf8Bom) ? Utf8Bom.Length : 0;
+        window = window[bomLength..];
+
+        var offset = bomLength;
+        while (!window.IsEmpty)
+        {
+            var lineEnd = window.IndexOf((byte)'\n');
+            var line = (lineEnd < 0 ? window : window[..lineEnd]).TrimEnd((byte)'\r');
+            if (line.IndexOfAnyExcept(" \t"u8) >= 0)
+            {
+                return offset;
+            }
+
+            if (lineEnd < 0)
+            {
+                break;
+            }
+
+            offset += lineEnd + 1;
+            window = window[(lineEnd + 1)..];
+        }
+
+        return bomLength;
+    }
+
+    /// <summary>
     /// 检查 MimeKit 解析出的消息是否至少含有一个常见邮件头。
     /// </summary>
     /// <param name="message">解析结果。</param>

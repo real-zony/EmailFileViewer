@@ -2,7 +2,6 @@ using System.Text;
 using System.Text.Unicode;
 using MimeKit;
 using MimeKit.Text;
-using UtfUnknown;
 
 namespace EmailFileViewer.Core.Parsing;
 
@@ -14,12 +13,6 @@ namespace EmailFileViewer.Core.Parsing;
 /// </remarks>
 internal static class TextPartDecoder
 {
-    // 识别只看前面这么多字节，足够判断，也避免长邮件拖慢速度
-    private const int DetectionByteLimit = 256 * 1024;
-
-    // 识别结果的可信度低于它时不采用，退回 MimeKit 的默认处理
-    private const float MinimumConfidence = 0.5f;
-
     private const int UsAsciiCodePage = 20127;
 
     private const int Utf8CodePage = 65001;
@@ -81,7 +74,7 @@ internal static class TextPartDecoder
             }
 
             var declaredBytes = ReadContentBytes(part);
-            return IsPlausible(declared, declaredBytes) ? declared : Detect(declaredBytes) ?? declared;
+            return IsPlausible(declared, declaredBytes) ? declared : CharsetGuesser.Detect(declaredBytes) ?? declared;
         }
 
         // 没声明字符集（或声明的名字 .NET 不认识）：先看 BOM 和 HTML 里的 meta 声明，再看字节本身
@@ -90,7 +83,7 @@ internal static class TextPartDecoder
             return hinted;
         }
 
-        return Detect(ReadContentBytes(part));
+        return CharsetGuesser.Detect(ReadContentBytes(part));
     }
 
     // 这三种声明经常写错：邮件客户端习惯性地写 us-ascii 或 iso-8859-1，实际内容却是别的编码
@@ -101,7 +94,7 @@ internal static class TextPartDecoder
 
     private static bool IsPlausible(Encoding declared, byte[] bytes)
     {
-        var isAscii = bytes.AsSpan().IndexOfAnyExceptInRange((byte)0x00, (byte)0x7F) < 0;
+        var isAscii = CharsetGuesser.IsAscii(bytes);
         return declared.CodePage switch
         {
             UsAsciiCodePage => isAscii,
@@ -109,23 +102,6 @@ internal static class TextPartDecoder
             // 声明单字节西文编码，内容却是合法的 UTF-8 多字节序列，几乎一定是标错了
             _ => isAscii || !Utf8.IsValid(bytes),
         };
-    }
-
-    private static Encoding? Detect(byte[] bytes)
-    {
-        // 纯 ASCII 用哪种编码解码结果都一样，不用识别
-        if (bytes.AsSpan().IndexOfAnyExceptInRange((byte)0x00, (byte)0x7F) < 0)
-        {
-            return null;
-        }
-
-        if (Utf8.IsValid(bytes))
-        {
-            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-        }
-
-        var detected = CharsetDetector.DetectFromBytes(bytes.AsSpan(0, Math.Min(bytes.Length, DetectionByteLimit))).Detected;
-        return detected is { Encoding: not null } && detected.Confidence >= MinimumConfidence ? detected.Encoding : null;
     }
 
     private static byte[] ReadContentBytes(TextPart part)

@@ -38,6 +38,7 @@ dotnet run --project samples/generator -- samples
 |------|-----------|
 | `smime-signed.eml`、`smime-encrypted.eml` | 每次运行现做一张自签名证书（RSA 2048），私钥只在内存里，不写盘、不提交；证书、签名时间和会话密钥每次都不同。内容（主题、正文、签名和加密的结构）不变 |
 | `body-rtf-only.msg`、`body-html-in-rtf.msg`、`nested-msg-two-levels.msg` | MsgKit 保存时写入当前时间和随机的 EntryId / InstanceKey。主题、正文、附件不变 |
+| `smime-msg-encrypted.msg`、`smime-msg-signed-opaque.msg`、`smime-msg-signed-clear.msg` | 同上，另外 smime.p7m 里的 CMS 数据用运行时现做的自签名证书生成（私钥不写盘），每次都不同 |
 | `attachment-msg-file.eml`、`format-msg-disguised-as-eml.eml`、`invalid/truncated.msg` | 它们由 `body-rtf-only.msg` 派生，跟着一起变 |
 
 multipart 边界（`----=_efv_01` 之类）、Message-Id、Content-Id、日期、PNG 和 docx/xlsx 都是固定值，不会变；换行固定为 CRLF，与运行平台无关。
@@ -63,7 +64,7 @@ multipart 边界（`----=_efv_01` 之类）、Message-Id、Content-Id、日期�
 |------|------|-----------|----------------|
 | `body-html-and-plain.eml` | 生成 | `multipart/alternative`，HTML 版和纯文本版的文字不同（`HTML-VERSION` / `PLAIN-TEXT-VERSION`），可以直接看出显示的是哪一个 | email-viewing / 正文格式选择 / 同时有 HTML 和纯文本 |
 | `body-plain-only.eml` | 生成 | 只有纯文本：多段、连续两个空行、空格和制表符缩进、`>` 引用行、`<b>` 与 `&` 等需要转义的字符、中文 | email-viewing / 正文格式选择（纯文本保留换行） |
-| `body-rtf-only.msg` | 生成 | **只有 RTF 正文**：没有 PR_BODY 纯文本流、没有 PR_HTML，RTF 不是 HTML 封装。含粗体、斜体、下划线、颜色、两个段落、项目符号、等宽字体行、超链接和 `\uN?` 转义的中文；标记文字 `RTF-ONLY-BODY` 和 `END-OF-RTF-BODY` | email-viewing / 正文格式选择 / 只有 RTF 正文的 MSG；email-opening / 通过文件对话框打开（`.msg`） |
+| `body-rtf-only.msg` | 生成 | **只有 RTF 正文**：没有 PR_BODY 纯文本流、没有 PR_HTML，RTF 不是 HTML 封装。含粗体、斜体、下划线、颜色、两个段落、项目符号、等宽字体行、超链接和 `\uN?` 转义的中文（`Chinese text: 中文段落。`，写成 `\u20013?\u25991?\u27573?\u33853?\u12290?`）；标记文字 `RTF-ONLY-BODY` 和 `END-OF-RTF-BODY` | email-viewing / 正文格式选择 / 只有 RTF 正文的 MSG；email-opening / 通过文件对话框打开（`.msg`） |
 | `body-html-in-rtf.msg` | 生成 | **HTML 封装在 RTF 中**：HTML 正文只存在于 PR_RTF_COMPRESSED 里（带 `\fromhtml1`），没有 PR_HTML 流、没有纯文本流。HTML 有标题、粗体斜体、链接、中文、列表、表格，标记文字 `HTML-IN-RTF-BODY` 和 `END-OF-HTML-IN-RTF-BODY`。封装用的是 MsgKit 的简化形式（整段 HTML 放进一个 `\htmltag` 组），不同于 Outlook 的逐标签封装；Outlook 生成的形式见下面几个上游样本 | email-viewing / 正文格式选择（HTML 正文优先）；MSG 里 RTF 封装的 HTML 要还原成 HTML 显示 |
 | `RtfSampleEmail.msg` | 上游 | 纯文本 + RTF 正文，没有 HTML（真实 Outlook 的 MSG 通常都带纯文本流，所以这个不是"只有 RTF"，用来测 RTF 优先于纯文本） | email-viewing / 正文格式选择（RTF 转换） |
 | `HtmlSampleEmailWithAttachment.msg` | 上游 | HTML 封装在 RTF 中（`\fromhtml1`，没有 PR_HTML 流）+ 一个 PDF 附件 | email-viewing / 正文格式选择；email-attachments / 列出附件 |
@@ -83,10 +84,12 @@ multipart 边界（`----=_efv_01` 之类）、Message-Id、Content-Id、日期�
 | `charset-iso-2022-jp.eml` | 生成 | `charset=ISO-2022-JP`，7bit，带换码序列；主题和发件人名称是 ISO-2022-JP 的编码字 | `文字コードのテスト：ISO-2022-JP`；发件人名称 `山田太郎` | 正文以 `お世話になっております。` 开头 |
 | `charset-shift-jis.eml` | 生成 | `charset=Shift_JIS`，Base64 | `文字コードのテスト：Shift_JIS` | 正文以 `お疲れ様です。` 开头 |
 | `charset-iso-2022-jp-thunderbird.eml` | 上游 | Thunderbird 发出的真实 ISO-2022-JP，主题拆成两个编码字 | `日本語メールテスト (testing Japanese emails)` | 第一行是 `Let's see if both subject and body works fine...`，其后是日文四行 |
-| `charset-koi8-r-raw-header.eml` | 上游 | 邮件头里直接写 KOI8-R 原始字节，没有 RFC 2047；正文声明 `koi8-r` | 按 KOI8-R 解读应为 `откуда он появился?`（MimeKit 默认会按 Latin-1 解成 `ïÔËÕÄÁ ÏÎ ÐÏÑ×ÉÌÓÑ?`） | 正文同上 |
+| `charset-koi8-r-raw-header.eml` | 上游 | 邮件头里直接写 KOI8-R 原始字节，没有 RFC 2047；正文声明 `koi8-r` | `Откуда он появился?`（按 KOI8-R 解读；MimeKit 默认会按 Latin-1 解成 `ïÔËÕÄÁ ÏÎ ÐÏÑ×ÉÌÓÑ?`，Core 参考正文声明的字符集重新解析邮件头） | 正文同上，换行结尾 |
+| `charset-gbk-raw-header.eml` | 生成 | **8 位原始邮件头**：`From` 名称和 `Subject` 直接写 GBK 字节，没有 RFC 2047 编码字（老的中文邮件客户端常这样发信）；正文声明 `charset="gb2312"`，Base64 | `老邮件：邮件头直接写 GBK 字节`；发件人名称 `李四`（`li.si@example.com`） | 正文以 `您好，` 开头，第二段说明邮件头是原始 GBK 字节、需要参考正文声明的 gb2312 来解码 |
 | `headers-rfc2047.eml` | 生成 | 见上一节 | `月度报告 Report （含附件 — résumé）`；发件人名称 `李 Li 明 (Ming)`；第一个收件人名称 `Müller 先生` | 正文是 UTF-8，列出了上面三个预期值 |
 
 所属规格场景：email-viewing / 字符集解码（GBK 编码的中文邮件、未声明字符集），以及"字符集缺失或声明错误时尝试自动识别"。
+两个 8 位原始邮件头样本（`charset-koi8-r-raw-header.eml`、`charset-gbk-raw-header.eml`）测的是邮件头本身没有声明字符集的情况。
 
 ### 内嵌图片与远程内容
 
@@ -107,6 +110,11 @@ multipart 边界（`----=_efv_01` 之类）、Message-Id、Content-Id、日期�
 | `smime-signed.eml` | 生成 | `multipart/signed`，`protocol="application/pkcs7-signature"`，SHA-256，签名文件 `smime.p7s`。证书是运行时现做的自签名证书，私钥不提交；应用不验证签名 | email-viewing / 加密与签名邮件提示 / 签名邮件 |
 | `smime-signed-thunderbird.eml` | 上游 | Thunderbird 24 签名的真实邮件，`multipart/signed`（SHA-1），正文 + 一张 jpg 附件 + `smime.p7s` | 同上 |
 | `smime-encrypted.eml` | 生成 | `application/pkcs7-mime; smime-type=enveloped-data; name=smime.p7m`，邮件头（发件人、收件人、主题、日期）是明文，正文只在加密信封里，解密后以 `SECRET-BODY` 开头 | email-viewing / 加密与签名邮件提示 / 加密邮件 |
+| `smime-msg-encrypted.msg` | 生成 | **MSG 版加密邮件**：消息类 `IPM.Note.SMIME`，内容在名为 `smime.p7m` 的附件里（CMS enveloped-data，正文 `SECRET-BODY…`） | 同上（MSG） |
+| `smime-msg-signed-opaque.msg` | 生成 | **MSG 版不透明签名**：消息类 `IPM.Note.SMIME`，`smime.p7m` 是 CMS signed-data，正文（`OPAQUE-SIGNED-BODY…`）包在签名里面 | email-viewing / 加密与签名邮件提示 / 签名邮件（MSG）；应用不解开 CMS，所以没有正文 |
+| `smime-msg-signed-clear.msg` | 生成 | **MSG 版明文签名**：消息类 `IPM.Note.SMIME.MultipartSigned`，`smime.p7m` 里是完整的 multipart/signed 邮件，正文 `CLEAR-SIGNED-BODY…` 可读 | 同上；应用取 smime.p7m 里邮件的正文 |
+
+三个 `smime-msg-*.msg` 是 MsgKit 先按普通邮件保存、再用 OpenMcdf 改写消息类得到的。**不要用 MsgReader 直接打开它们**：MsgReader 对这类消息会验证证书链，可能联网；Core 在交给 MsgReader 之前先在内存副本里把消息类改回 `IPM.Note`。
 
 ### 外观（深色模式下的邮件正文）
 
@@ -159,6 +167,8 @@ smoke 不递归，不会读到这里。
 | `png-disguised-as-eml.eml` | 同一张 PNG，但扩展名是 `.eml`，用来确认应用按内容而不是扩展名判断 | `FormatException` | 同上 |
 | `empty.eml` | 0 字节的空文件 | `FormatException`（End of stream） | 同上 |
 
+Core 对这几个文件的判断（`EmailParseException.Kind`）：`not-an-email.png`、`png-disguised-as-eml.eml`（开头有 NUL 字节）和 `empty.eml`（空文件）是"不支持的格式"，`truncated.msg` 是"文件已损坏"，`truncated-half.eml` 能解析（只丢了截断部分）。文件不存在、没有读权限、路径是目录是"无法读取"。
+
 ### 素材（`assets/`）
 
 全部由生成器写出，PNG 是纯色块图案，体积很小。
@@ -182,12 +192,40 @@ smoke 不递归，不会读到这里。
 
 ## 对解析核心的提示
 
-写样本和跑 smoke 时发现的行为，后续任务（3.x）会用到：
+写样本和跑 smoke 时发现的行为，以及 Core 现在的处理方式：
 
-- MimeKit 的 TNEF 解析（`TnefPart`）和 MsgReader 解析 MSG 都需要先 `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)`，否则两者都会抛 `TypeInitializationException`（MimeKit 内部原因是代码页 1252 不可用，MsgReader 出在 `MsgReader.Rtf.Font`）。sidecar 的 `Program.cs` 和测试的 `TestEnvironment` 已经注册。
-- `TnefPart.ExtractAttachments()` 除了文件，还会把 TNEF 里的正文作为没有文件名的文本部分一并返回，列附件时要按文件名过滤。
-- MimeKit 的 `MimeMessage.Attachments` 不包含没有 `Content-Disposition` 的 `message/rfc822` 部分（`nested-rfc822-two-levels.eml` 的附件数是 0），但包含 `Content-Disposition: attachment` 的那种（`TestWithAttachmentsAndInlines.eml`、`attachment-eml-file.eml`）。
-- 签名邮件的签名文件 `smime.p7s` 和加密邮件的信封 `smime.p7m` 在 MimeKit 里会被当作附件；是否在列表里隐藏，在任务 3.6 / 3.7 里决定。
+- MimeKit 的 TNEF 解析（`TnefPart`）和 MsgReader 解析 MSG 都需要先注册代码页编码提供程序（`CodePagesEncodingProvider`），否则两者都会抛 `TypeInitializationException`。**现在由 Core 在解析入口自己注册**，调用方（sidecar、测试）不需要也不应该再注册。
+- `TnefPart.ExtractAttachments()` 除了文件，还会把 TNEF 里的正文作为没有文件名的文本部分一并返回。Core 只取有文件名的成员，winmail.dat 本身不列出。
+- MimeKit 的 `MimeMessage.Attachments` 不包含没有 `Content-Disposition` 的 `message/rfc822` 部分。Core 自己遍历 MIME 结构，这类部分、`Content-Disposition: attachment` 的 rfc822、作为附件的 `.eml` / `.msg` 文件都列为嵌套邮件。
+- 签名邮件的签名文件 `smime.p7s`（`multipart/signed` 的第二个成员）和加密邮件的信封 `smime.p7m` 不是用户附件，Core 不列出。
+- 邮件头里直接写 8 位字节（没有 RFC 2047）而且不是 UTF-8 时，MimeKit 会按 ISO-8859-1 解出乱码。Core 检测到这种情况就用正文声明的字符集（没有就根据邮件头的字节识别）设为 `ParserOptions.CharsetEncoding` 重新解析。
+- 文件开头有空行（或 UTF-8 BOM）时，MimeKit 会把整封邮件当成正文；Core 先跳过它们再交给 MimeKit。
+- MSG 的 S/MIME 邮件见上面的 `smime-msg-*.msg`。
+
+### 附件列表的预期结果
+
+Core 列出的附件（Id 是不透明字符串，这里只列文件名）：
+
+| 文件 | 附件 |
+|------|------|
+| `attachments-pdf-xlsx-jpg.eml` | `report.pdf`、`budget.xlsx`、`photo.jpg` |
+| `attachments-duplicate-names.eml` | 两个 `report.pdf`（内容不同） |
+| `attachments-unsafe-names.eml` | 7 个原样的文件名（清理发生在保存时） |
+| `attachments-executables.eml` | 6 个可执行和脚本附件 |
+| `cid-inline-image.eml` | 只有 `quarterly-report.docx`（两张 cid 图片内嵌，不列出） |
+| `TestWithAttachmentsAndInlines.eml` | 4 个文本附件、2 个声明为 `message/rfc822` 的部分（内容其实不是邮件，打开会报"不支持的格式"）；cid 的 PNG 不列出 |
+| `nested-rfc822-two-levels.eml` | 一个嵌套邮件（中层），中层里一个嵌套邮件（内层），内层有 `level3-note.txt` |
+| `simple-embedded-message.eml` | 一个嵌套邮件 |
+| `attachment-eml-file.eml` | `forwarded-as-file.eml`、`forwarded-as-rfc822.eml`，都是嵌套邮件 |
+| `attachment-msg-file.eml` | `forwarded-message.msg`，嵌套邮件 |
+| `tnef-winmail-docx.eml` | 只有 `meeting-minutes.docx` |
+| `smime-signed.eml`、`smime-encrypted.eml`、`smime-msg-*.msg` | 没有附件 |
+| `smime-signed-thunderbird.eml` | 只有 `signed.jpg` |
+| `EmailWithAttachments.msg` | 只有 `peterpan.jpg`（`tinkerbell.jpg` 是被 HTML 按文件名引用的隐藏图片，内嵌，不列出） |
+| `HtmlSampleEmailWithAttachment.msg` | `SampleAttachment.pdf` |
+| `EmailWithMsgAttachment.msg` | 一个嵌套 MSG |
+| `EmailWithInnerMailAndAttachments.msg` | `OUTER 1.pdf`、`OUTER 2.pdf`、一个嵌套 MSG（里面有 `INNER 1.pdf`、`INNER 2.pdf`） |
+| `nested-msg-two-levels.msg` | 一个嵌套 MSG（中层），中层里一个嵌套 MSG（内层），内层有 `level3-note.txt` |
 
 ## 缺口与局限
 
@@ -195,6 +233,7 @@ smoke 不递归，不会读到这里。
 
 1. **没有 Outlook 真实导出的、带完整 MAPI 属性的 winmail.dat。** `tnef-winmail-docx.eml` 里的 TNEF 是生成器按规范写的最小实现，MimeKit 能解析，但没有用真实 Outlook 验证。MimeKit 测试集里的 `.tnef` 文件是裸数据流且含真实姓名，MSGReader 里没有 winmail.dat，所以没有采用（详见 `ATTRIBUTION.md`）。
 2. **`body-rtf-only.msg`、`body-html-in-rtf.msg` 和 `nested-msg-two-levels.msg` 没有用真实 Outlook 打开验证。** 它们由 MsgKit 生成，嵌套邮件还经过手工改写复合文档，已通过 MsgReader 读回验证，并对照了 Outlook 生成的上游样本的属性布局。`body-html-in-rtf.msg` 的 RTF 封装比 Outlook 的简单，Outlook 形式的 HTML 封装请用上游的 `HtmlSampleEmailWithAttachment.msg` 等。
-3. **没有不透明签名的 S/MIME**（`application/pkcs7-mime; smime-type=signed-data`，正文包在 CMS 里）。规格只要求处理 `multipart/signed` 的签名邮件和加密邮件，应用也不创建 S/MIME 上下文，所以没有构造。
+3. **EML 没有不透明签名的 S/MIME**（`application/pkcs7-mime; smime-type=signed-data`，正文包在 CMS 里）。规格只要求处理 `multipart/signed` 的签名邮件和加密邮件，应用也不创建 S/MIME 上下文，所以没有构造；MSG 版的不透明签名有（`smime-msg-signed-opaque.msg`），应用把它标为"已签名"，但不解开 CMS，所以没有正文。
+   另外，三个 `smime-msg-*.msg` 没有用真实 Outlook 打开验证，它们按 MS-OXMSG 和 MsgReader 对这类消息的读取逻辑构造（消息类 + smime.p7m 附件）。
 4. **`Tool.app` 只是文件名模拟。** `.app` 在 macOS 上是目录包，邮件里的附件只能是一个文件。
 5. **远程资源的地址要合并到 `main` 之后才能真正加载。** 在那之前"用户选择加载"后图片会是裂图，属于预期。

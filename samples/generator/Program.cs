@@ -15,11 +15,13 @@ MimeSamples.WriteAll(output);
 CharsetSamples.WriteAll(output);
 SpecialSamples.WriteAll(output);
 MsgSamples.WriteAll(output);
+SmimeMsgSamples.WriteAll(output);
 DerivedSamples.WriteAll(output);
 
 Verification.VerifyCharsetAndHeaderSamples(output.Root);
 Verification.VerifyMimeSamples(output.Root);
 Verification.VerifyMsgSamples(output.Root);
+SmimeMsgSamples.Verify(output.Root);
 Verification.VerifyFormatMismatchAndInvalidSamples(output.Root);
 Console.WriteLine($"已生成 {output.Written.Count} 个文件到 {output.Root}");
 return 0;

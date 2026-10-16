@@ -42,31 +42,46 @@ public static class EmailParser
 
         await using (stream)
         {
-            var header = new byte[EmailFormatDetector.SniffLength];
-            int headerLength;
-            try
-            {
-                headerLength = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
-            }
-            catch (Exception ex) when (IsFileAccessFailure(ex))
-            {
-                throw CreateUnreadable(filePath, ex);
-            }
-
-            var headerBytes = header.AsMemory(0, headerLength);
-            stream.Position = 0;
-
-            if (EmailFormatDetector.IsOleCompoundFile(headerBytes.Span))
-            {
-                return await ParseMsgAsync(filePath, stream, cancellationToken);
-            }
-
-            EmailFormatDetector.EnsureLooksLikeMime(headerBytes.Span);
-            return await ParseMimeAsync(filePath, stream, cancellationToken);
+            return await ParseStreamAsync(stream, filePath, cancellationToken);
         }
     }
 
-    private static async Task<ParsedEmail> ParseMsgAsync(string filePath, FileStream stream, CancellationToken cancellationToken)
+    /// <summary>
+    /// 按内容解析一个可定位的流：文件、或者从附件里写出来的内存流。
+    /// </summary>
+    /// <param name="stream">要解析的流，从头读起。</param>
+    /// <param name="sourceName">来源名称（路径或附件文件名），只用于错误信息。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    internal static async Task<ParsedEmail> ParseStreamAsync(Stream stream, string sourceName, CancellationToken cancellationToken)
+    {
+        CodePageRegistration.EnsureRegistered();
+
+        var header = new byte[EmailFormatDetector.SniffLength];
+        int headerLength;
+        try
+        {
+            stream.Position = 0;
+            headerLength = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
+        }
+        catch (Exception ex) when (IsFileAccessFailure(ex))
+        {
+            throw CreateUnreadable(sourceName, ex);
+        }
+
+        var headerBytes = header.AsMemory(0, headerLength);
+        if (EmailFormatDetector.IsOleCompoundFile(headerBytes.Span))
+        {
+            stream.Position = 0;
+            return await ParseMsgAsync(sourceName, stream, cancellationToken);
+        }
+
+        EmailFormatDetector.EnsureLooksLikeMime(headerBytes.Span);
+        var startOffset = EmailFormatDetector.GetMimeStartOffset(headerBytes.Span);
+        stream.Position = startOffset;
+        return await ParseMimeAsync(sourceName, stream, startOffset, cancellationToken);
+    }
+
+    private static async Task<ParsedEmail> ParseMsgAsync(string sourceName, Stream stream, CancellationToken cancellationToken)
     {
         // 先整个读进内存：磁盘错误在这一步变成“无法读取”，之后 MsgReader 抛出的异常都是内容问题，归为“已损坏”；
         // 也让文档打开期间不占用原文件，Windows 上用户可以删除或移动它
@@ -81,10 +96,11 @@ public static class EmailParser
             }
             catch (Exception ex) when (IsFileAccessFailure(ex))
             {
-                throw CreateUnreadable(filePath, ex);
+                throw CreateUnreadable(sourceName, ex);
             }
 
-            buffer.Position = 0;
+            // S/MIME 的 MSG 要先把消息类改成普通邮件，免得 MsgReader 去验证证书链（可能联网）
+            var smime = MsgSmime.NeutralizeInPlace(buffer);
             message = new MsgStorageMessage(buffer, FileAccess.Read, leaveStreamOpen: true);
 
             // 其他 OLE 文档（Word、Excel 等）也有同样的文件头，MsgReader 不会报错，只是得到一个类型未知的空消息
@@ -93,8 +109,7 @@ public static class EmailParser
                 throw new EmailParseException(EmailParseErrorKind.UnsupportedFormat, "文件是 OLE 复合文档，但不是 Outlook 邮件。");
             }
 
-            var document = MsgEmailMapper.Map(message);
-            var parsed = new ParsedEmail(document, message.Attachments.Count, mimeMessage: null, message, buffer);
+            var parsed = new ParsedEmail(MsgEmailMapper.Map(message, smime), mimeMessage: null, message, buffer);
             succeeded = true;
             return parsed;
         }
@@ -112,7 +127,7 @@ public static class EmailParser
         }
     }
 
-    private static async Task<ParsedEmail> ParseMimeAsync(string filePath, FileStream stream, CancellationToken cancellationToken)
+    private static async Task<ParsedEmail> ParseMimeAsync(string sourceName, Stream stream, long startOffset, CancellationToken cancellationToken)
     {
         MimeMessage? message = null;
         var succeeded = false;
@@ -121,14 +136,26 @@ public static class EmailParser
             message = await MimeMessage.LoadAsync(stream, cancellationToken);
             EmailFormatDetector.EnsureHasCommonHeader(message);
 
-            var document = MimeEmailMapper.Map(message);
-            var parsed = new ParsedEmail(document, message.Attachments.Count(), message, msgMessage: null, msgStream: null);
+            // 邮件头里直接写了 8 位字节（没有 RFC 2047 编码）而且不是 UTF-8 时，用正文声明的字符集或识别出的字符集重新解析
+            var headerEncoding = MimeHeaderEncodingResolver.Resolve(message);
+            if (headerEncoding is not null)
+            {
+                message.Dispose();
+                message = null;
+                stream.Position = startOffset;
+
+                var options = ParserOptions.Default.Clone();
+                options.CharsetEncoding = headerEncoding;
+                message = await MimeMessage.LoadAsync(options, stream, cancellationToken);
+            }
+
+            var parsed = new ParsedEmail(MimeEmailMapper.Map(message), message, msgMessage: null, msgStream: null);
             succeeded = true;
             return parsed;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw CreateUnreadable(filePath, ex);
+            throw CreateUnreadable(sourceName, ex);
         }
         catch (Exception ex) when (ex is not (EmailParseException or OperationCanceledException or OutOfMemoryException))
         {

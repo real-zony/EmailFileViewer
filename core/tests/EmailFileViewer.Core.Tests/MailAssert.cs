@@ -59,4 +59,28 @@ internal static partial class MailAssert
     {
         Assert.Equal(expected, actual.Select(address => (address.Name, address.Address)).ToArray());
     }
+
+    /// <summary>
+    /// 取出附件写出后的全部字节。
+    /// </summary>
+    /// <param name="parsed">解析结果。</param>
+    /// <param name="attachmentId">附件 Id。</param>
+    /// <returns>写出的字节。</returns>
+    public static async Task<byte[]> ReadAttachmentAsync(ParsedEmail parsed, string attachmentId)
+    {
+        using var buffer = new MemoryStream();
+        await parsed.WriteAttachmentAsync(attachmentId, buffer);
+        return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// 在附件列表里按文件名找附件（要求文件名唯一）。
+    /// </summary>
+    /// <param name="document">邮件文档。</param>
+    /// <param name="fileName">文件名。</param>
+    /// <returns>附件元数据。</returns>
+    public static EmailAttachment AttachmentNamed(EmailDocument document, string fileName)
+    {
+        return Assert.Single(document.Attachments, attachment => attachment.FileName == fileName);
+    }
 }

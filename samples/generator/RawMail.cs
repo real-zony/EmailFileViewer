@@ -21,6 +21,22 @@ internal sealed class RawMail
         return this;
     }
 
+    /// <summary>
+    /// 写入值是原始字节的邮件头，不做 RFC 2047 编码。用来构造老邮件里常见的“邮件头直接写 GBK 等 8 位字节”的情况。
+    /// </summary>
+    public RawMail RawHeader(string name, byte[] valueBytes)
+    {
+        if (name.Any(c => c > 127))
+        {
+            throw new InvalidOperationException($"邮件头名称 {name} 只能包含 ASCII。");
+        }
+
+        Write(Encoding.ASCII.GetBytes($"{name}: "));
+        Write(valueBytes);
+        Write("\r\n"u8);
+        return this;
+    }
+
     public RawMail EndHeaders()
     {
         Write("\r\n"u8);

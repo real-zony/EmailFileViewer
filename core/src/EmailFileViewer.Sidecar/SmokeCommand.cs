@@ -9,6 +9,8 @@ namespace EmailFileViewer.Sidecar;
 /// </summary>
 public static class SmokeCommand
 {
+    private const int MaxNestedDepth = 5;
+
     private static readonly string[] EmailExtensions = [".eml", ".msg"];
 
     /// <summary>
@@ -16,8 +18,8 @@ public static class SmokeCommand
     /// </summary>
     /// <remarks>
     /// 每个成功的文件向 <paramref name="output"/> 写一行 <c>文件名\t主题\t正文来源格式\t附件数</c>；失败的文件向 <paramref name="error"/> 写错误信息。
-    /// 附件数是解析库报告的原始数量，附件列表实现之前先这样输出。
-    /// 解析成功后还会把邮件文档序列化成 JSON（结果丢弃），用来验证原生发布后 JSON 序列化也能工作。
+    /// 解析成功后还会做两项只为验证原生发布的检查（结果不输出）：把邮件文档序列化成 JSON；
+    /// 逐个写出附件并核对字节数与列表里的大小一致，嵌套邮件逐层打开（声明为邮件但内容不是邮件的，打不开不算失败）。
     /// </remarks>
     /// <param name="directory">样本目录。</param>
     /// <param name="output">标准输出。</param>
@@ -62,8 +64,10 @@ public static class SmokeCommand
                     throw new InvalidOperationException("邮件文档序列化后为空。");
                 }
 
+                await VerifyAttachmentsAsync(parsed, depth: 0, cancellationToken);
+
                 await output.WriteLineAsync(
-                    $"{fileName}\t{ToSingleLine(document.Subject ?? string.Empty)}\t{document.Body.SourceFormat}\t{parsed.RawAttachmentCount}");
+                    $"{fileName}\t{ToSingleLine(document.Subject ?? string.Empty)}\t{document.Body.SourceFormat}\t{document.Attachments.Count}");
             }
             catch (EmailParseException ex)
             {
@@ -84,6 +88,37 @@ public static class SmokeCommand
         }
 
         return 0;
+    }
+
+    // 写出每个附件，核对大小；嵌套邮件继续往里打开，最多几层，免得恶意文件无限嵌套
+    private static async Task VerifyAttachmentsAsync(ParsedEmail parsed, int depth, CancellationToken cancellationToken)
+    {
+        foreach (var attachment in parsed.Document.Attachments)
+        {
+            using (var buffer = new MemoryStream())
+            {
+                await parsed.WriteAttachmentAsync(attachment.Id, buffer, cancellationToken);
+                if (buffer.Length != attachment.Size)
+                {
+                    throw new InvalidOperationException($"附件 {attachment.Id} 写出了 {buffer.Length} 字节，列表里的大小是 {attachment.Size}。");
+                }
+            }
+
+            if (!attachment.IsNestedEmail || depth >= MaxNestedDepth)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var nested = await parsed.OpenNestedEmailAsync(attachment.Id, cancellationToken);
+                await VerifyAttachmentsAsync(nested, depth + 1, cancellationToken);
+            }
+            catch (EmailParseException)
+            {
+                // 声明为邮件但内容不是邮件（样本里有这种附件）：打不开是预期的结果
+            }
+        }
     }
 
     // 主题里可能有制表符或换行，会破坏按制表符分隔的输出

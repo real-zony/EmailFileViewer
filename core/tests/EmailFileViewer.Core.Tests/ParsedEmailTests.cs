@@ -20,7 +20,7 @@ public class ParsedEmailTests
         using var parsed = await MailAssert.ParseSampleAsync(sampleName);
 
         Assert.Equal(expectedSubject, parsed.Document.Subject);
-        Assert.Equal(expectedAttachmentCount, parsed.RawAttachmentCount);
+        Assert.Equal(expectedAttachmentCount, parsed.Document.Attachments.Count);
     }
 
     [Theory]
