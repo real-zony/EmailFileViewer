@@ -1,1 +1,19 @@
 .DS_Store
+
+# .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userprefs
+TestResults/
+*.log
+.vs/
+.idea/
+*.nupkg
+*.binlog
+coverage*.xml
+
+# CI 产物
+artifacts/

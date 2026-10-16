@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 打开裁剪、单文件和 AOT 分析器，让不兼容 NativeAOT 的调用在构建时就能看到警告 -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" />
+    <PackageReference Include="MsgReader" />
+  </ItemGroup>
+
+</Project>

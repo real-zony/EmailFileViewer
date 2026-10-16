@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <!-- sidecar 不需要区域文化数据；开启后 Linux 上不依赖 libicu。字符集解码走 CodePagesEncodingProvider，不受影响 -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EmailFileViewer.Core\EmailFileViewer.Core.csproj" />
+  </ItemGroup>
+
+</Project>
