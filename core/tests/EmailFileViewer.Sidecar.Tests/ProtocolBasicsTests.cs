@@ -279,7 +279,7 @@ public class ProtocolBasicsTests
             new StdioOptions { SessionRoot = Path.Combine(temp.DirectoryPath, "sessions") });
 
         Assert.Equal(1, code);
-        Assert.Empty(Directory.GetDirectories(Path.Combine(temp.DirectoryPath, "sessions")));
+        Eventually.HasNoSubdirectories(Path.Combine(temp.DirectoryPath, "sessions"));
     }
 
     [Fact]

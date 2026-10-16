@@ -69,8 +69,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang zlib1g-dev
 
+      # GitHubActions logger 把失败的测试写成 check-run annotation，不用下载日志就能看到失败原因；
+      # trx 是补充：每个测试项目一份，失败时随下面的步骤上传
       - name: 运行单元测试
-        run: dotnet test core -c Release
+        run: dotnet test core -c Release --logger GitHubActions --logger trx --results-directory artifacts/TestResults
+
+      - name: 上传测试结果（测试失败时）
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.rid }}
+          path: artifacts/TestResults
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: 发布 sidecar（NativeAOT）
         run: dotnet publish core/src/EmailFileViewer.Sidecar -c Release -r ${{ matrix.rid }} -o "$SIDECAR_DIR"

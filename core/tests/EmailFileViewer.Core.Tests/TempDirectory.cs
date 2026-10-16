@@ -12,7 +12,9 @@ internal sealed class TempDirectory : IDisposable
     /// </summary>
     public TempDirectory()
     {
-        DirectoryPath = Path.Combine(Path.GetTempPath(), "efv-tests-" + Guid.NewGuid().ToString("N"));
+        // GitHub 的 Windows runner 上 TEMP 是 8.3 短名（C:\Users\RUNNER~1\...），而 Path.GetFullPath 会把它展开成长名（runneradmin）。
+        // 这里先规范化一次，测试里拼出来的路径才能和被测代码返回的（经过 GetFullPath 的）路径逐字符比较
+        DirectoryPath = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "efv-tests-" + Guid.NewGuid().ToString("N")));
         Directory.CreateDirectory(DirectoryPath);
     }
 

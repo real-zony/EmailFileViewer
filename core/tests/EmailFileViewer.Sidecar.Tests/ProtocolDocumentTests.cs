@@ -71,14 +71,15 @@ public partial class ProtocolDocumentTests
             }
 
             Assert.True(table.TryGet(parsed.Method, out var method), $"文档第 {request.Line} 行：没有方法 {parsed.Method}");
+            var parameters = WithAbsolutePathsForThisPlatform(parsed.Params);
             if (expectedCode == ErrorCodes.InvalidParams)
             {
-                var rejected = Assert.Throws<ProtocolException>(() => method.Prepare(parsed.Params));
+                var rejected = Assert.Throws<ProtocolException>(() => method.Prepare(parameters));
                 Assert.Equal(ErrorCodes.InvalidParams, rejected.Code);
             }
             else
             {
-                var call = method.Prepare(parsed.Params);
+                var call = method.Prepare(parameters);
                 if (parsed.Method is "attachment.save" or "attachment.saveAll" or "attachment.extractForOpen" or "email.openNested" or "document.close")
                 {
                     Assert.False(string.IsNullOrEmpty(call.DocumentId), $"文档第 {request.Line} 行：{parsed.Method} 应该针对某个文档");
@@ -223,6 +224,56 @@ public partial class ProtocolDocumentTests
         Assert.Contains($"当前协议版本：**{ProtocolInfo.Version}**", text);
     }
 
+    [Fact]
+    [Trait("Task", "4.4")]
+    public void TheExamples_AreReadTheSameFromACrLfCopyOfTheDocument()
+    {
+        // Windows 的 CI 上 git 会把文本文件检出成 CRLF：文档里的示例和说明不能因为换行不同而读成别的内容
+        using var temp = new EmailFileViewer.Core.Tests.TempDirectory();
+        var crlfCopy = Path.Combine(temp.DirectoryPath, "sidecar-protocol.md");
+        File.WriteAllText(crlfCopy, File.ReadAllText(FindDocument()).ReplaceLineEndings("\r\n"));
+        Assert.Contains("\r\n", File.ReadAllText(crlfCopy));
+
+        var original = ReadExamples(FindDocument());
+        var fromCrLf = ReadExamples(crlfCopy);
+
+        Assert.Equal(original, fromCrLf);
+    }
+
+    [Fact]
+    [Trait("Task", "4.4")]
+    public void TheDocument_SaysThatEveryMessageEndsWithLfOnEveryPlatform()
+    {
+        var text = File.ReadAllText(FindDocument());
+
+        Assert.Contains("行尾固定是 `\\n`", text);
+        Assert.Contains("Windows", text);
+    }
+
+    // 文档里的示例路径是 /Users/...：在 Windows 上这不是完整路径（没有盘符），先换成当前平台的绝对路径再检查参数
+    private static JsonElement? WithAbsolutePathsForThisPlatform(JsonElement? parameters)
+    {
+        if (parameters is null)
+        {
+            return null;
+        }
+
+        var node = JsonNode.Parse(parameters.Value.GetRawText())!.AsObject();
+        foreach (var property in node.ToList())
+        {
+            if (property.Value is JsonValue value
+                && value.TryGetValue<string>(out var text)
+                && text.StartsWith('/')
+                && !Path.IsPathFullyQualified(text))
+            {
+                node[property.Key] = Path.GetFullPath(text);
+            }
+        }
+
+        using var document = JsonDocument.Parse(node.ToJsonString());
+        return document.RootElement.Clone();
+    }
+
     private static MethodTable CreateMethodTable()
     {
         return new SidecarMethods(new DocumentRegistry(), new SessionDirectory(Path.Combine(Path.GetTempPath(), "efv-doc-test-never-created")), new AttachmentFiles()).CreateTable();
@@ -245,9 +296,11 @@ public partial class ProtocolDocumentTests
         throw new FileNotFoundException("在上级目录中找不到 docs/sidecar-protocol.md");
     }
 
-    private static List<Example> ReadExamples()
+    private static List<Example> ReadExamples() => ReadExamples(FindDocument());
+
+    private static List<Example> ReadExamples(string path)
     {
-        var lines = File.ReadAllLines(FindDocument());
+        var lines = File.ReadAllLines(path);
         var examples = new List<Example>();
 
         for (var i = 0; i < lines.Length; i++)

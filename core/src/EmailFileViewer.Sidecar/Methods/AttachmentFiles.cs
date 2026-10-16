@@ -18,6 +18,12 @@ internal sealed class AttachmentFiles
     // 竞争导致重名时重新取名，最多试这么多次
     private const int MaxCreateAttempts = 20;
 
+    // Windows 上刚写完的文件可能被杀毒软件、搜索索引短暂占用，目标文件也可能正被别的程序打开，
+    // 这时改名会因为“文件正在使用”或“拒绝访问”失败：等一会儿再试，总共最多等约 0.6 秒
+    private const int MaxMoveAttempts = 6;
+
+    private const int FirstMoveRetryDelayMilliseconds = 20;
+
     private readonly Func<string, bool> _pathExists;
 
     /// <summary>
@@ -48,7 +54,7 @@ internal sealed class AttachmentFiles
         try
         {
             await WriteNewFileAsync(tempPath, writeAsync, cancellationToken);
-            File.Move(tempPath, fullPath, overwrite: true);
+            await MoveAsync(tempPath, fullPath, overwrite: true, cancellationToken);
             return fullPath;
         }
         catch
@@ -127,7 +133,7 @@ internal sealed class AttachmentFiles
                 var path = ChooseUniquePath(directory, name);
                 try
                 {
-                    File.Move(tempPath, path, overwrite: false);
+                    await MoveAsync(tempPath, path, overwrite: false, cancellationToken);
                     return path;
                 }
                 catch (IOException) when (_pathExists(path))
@@ -211,6 +217,34 @@ internal sealed class AttachmentFiles
     {
         var uniqueName = AttachmentFileNames.GetUniqueName(name, candidate => _pathExists(AttachmentPaths.CombineInsideDirectory(directory, candidate)));
         return AttachmentPaths.CombineInsideDirectory(directory, uniqueName);
+    }
+
+    // 改名。Windows 上遇到可能是暂时的失败（文件正在使用、拒绝访问）时短暂等待后重试；其他平台和明确不会好转的失败直接抛出
+    private static async Task MoveAsync(string source, string destination, bool overwrite, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(source, destination, overwrite);
+                return;
+            }
+            catch (Exception ex) when (attempt < MaxMoveAttempts && OperatingSystem.IsWindows() && MayBeTransient(ex, destination, overwrite))
+            {
+                await Task.Delay(FirstMoveRetryDelayMilliseconds << (attempt - 1), cancellationToken);
+            }
+        }
+    }
+
+    // 不重试的情况：文件夹不存在、源文件不见了、目标是一个文件夹，以及不允许覆盖时目标已经有了（那是重名，由调用方换名字）
+    private static bool MayBeTransient(Exception exception, string destination, bool overwrite)
+    {
+        if (exception is not (IOException or UnauthorizedAccessException) || exception is DirectoryNotFoundException or FileNotFoundException)
+        {
+            return false;
+        }
+
+        return !Directory.Exists(destination) && (overwrite || !File.Exists(destination));
     }
 
     private static async Task WriteNewFileAsync(string path, Func<Stream, CancellationToken, Task> writeAsync, CancellationToken cancellationToken)

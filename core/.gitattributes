@@ -1,0 +1,7 @@
+# 文本文件固定用 LF 检出。Windows 上 core.autocrlf=true 会把它们检出成 CRLF：
+# C# 原始字符串字面量里的换行、文档里的 JSON 示例的换行都会跟着变，容易让测试在 Windows 上和其他平台表现不同。
+*.cs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.md text eol=lf
+*.json text eol=lf

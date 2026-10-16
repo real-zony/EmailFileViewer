@@ -23,6 +23,7 @@ internal sealed class SidecarSession : IAsyncDisposable
     private readonly object _sync = new();
     private readonly Dictionary<string, TaskCompletionSource<JsonObject>> _waiting = [];
     private readonly List<string> _lines = [];
+    private readonly MemoryStream _rawOutput = new();
     private int _nextId;
     private bool _completed;
 
@@ -67,6 +68,18 @@ internal sealed class SidecarSession : IAsyncDisposable
         }
     }
 
+    /// <summary>sidecar 写到输出流里的原始字节（没有经过任何解码和换行转换）。</summary>
+    public byte[] RawOutput
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _rawOutput.ToArray();
+            }
+        }
+    }
+
     /// <summary>启动一个会话。</summary>
     public static SidecarSession Start(StdioOptions? options = null) => new(options);
 
@@ -97,10 +110,16 @@ internal sealed class SidecarSession : IAsyncDisposable
         return await waiting.Task.WaitAsync(Timeout);
     }
 
-    /// <summary>发送一行原始文本（不一定是合法的请求）。</summary>
+    /// <summary>发送一行原始文本（不一定是合法的请求），行尾是 <c>\n</c>。</summary>
     public async Task SendRawAsync(string line)
     {
-        await _requests.Writer.WriteAsync(Encoding.UTF8.GetBytes(line + "\n"));
+        await SendTextAsync(line + "\n");
+    }
+
+    /// <summary>原样发送一段文本，不补行尾（用来测试 <c>\r\n</c> 和没有行尾的最后一行）。</summary>
+    public async Task SendTextAsync(string text)
+    {
+        await _requests.Writer.WriteAsync(Encoding.UTF8.GetBytes(text));
     }
 
     /// <summary>等到收到至少 <paramref name="count"/> 行没有对应请求的响应（<c>id</c> 为 null）并返回它们。</summary>
@@ -175,7 +194,7 @@ internal sealed class SidecarSession : IAsyncDisposable
 
     private async Task ReadResponsesAsync()
     {
-        using var reader = new StreamReader(_responses.Reader.AsStream(), new UTF8Encoding(false));
+        using var reader = new StreamReader(new TeeReadStream(_responses.Reader.AsStream(), _rawOutput, _sync), new UTF8Encoding(false));
         while (await reader.ReadLineAsync() is { } line)
         {
             lock (_sync)
@@ -211,6 +230,56 @@ internal sealed class SidecarSession : IAsyncDisposable
             }
 
             waiting?.TrySetResult(response);
+        }
+    }
+}
+
+// 读的同时把读到的字节抄一份，用来检查输出的原始字节
+file sealed class TeeReadStream(Stream inner, MemoryStream copy, object copyLock) : Stream
+{
+    public override bool CanRead => true;
+
+    public override bool CanSeek => false;
+
+    public override bool CanWrite => false;
+
+    public override long Length => throw new NotSupportedException();
+
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override void Flush()
+    {
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        var read = inner.Read(buffer, offset, count);
+        Copy(buffer.AsSpan(offset, read));
+        return read;
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        var read = await inner.ReadAsync(buffer, cancellationToken);
+        Copy(buffer.Span[..read]);
+        return read;
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    private void Copy(ReadOnlySpan<byte> bytes)
+    {
+        lock (copyLock)
+        {
+            copy.Write(bytes);
         }
     }
 }

@@ -11,7 +11,7 @@ Tauri 外壳（Rust）通过 stdio 与 sidecar（`EmailFileViewer.Sidecar`，.NE
 EmailFileViewer.Sidecar --stdio
 ```
 
-- **stdout 只输出协议消息**，每条一行，UTF-8 无 BOM，行尾 `\n`。诊断日志一律写 **stderr**（只在发生未预期的错误时才写）。
+- **stdout 只输出协议消息**，每条一行，UTF-8 无 BOM，行尾固定是 `\n`（Windows 上也是，不是 `\r\n`，见“9. 平台差异”）。诊断日志一律写 **stderr**（UTF-8，只在发生未预期的错误时才写）。
 - **就绪判断**：进程启动后发送 `system.ping`，收到 `{"protocolVersion":1}` 即表示 sidecar 已就绪。进程启动本身不输出任何内容。
 - **退出**：关闭 sidecar 的 stdin（EOF）。sidecar 会先处理完已经收到的请求并写出响应，然后关闭所有文档、删除本次会话的临时目录，以退出码 0 退出。
 - 收到 SIGINT（Ctrl+C）或 SIGTERM 时也走同样的清理，退出码 130。
@@ -380,3 +380,21 @@ this is not json
 - **路径**：`email.open` 的 `path` 只来自 Rust 弹出的对话框、拖放事件或启动参数；`targetPath`、`targetDir` 是 Rust 弹出保存对话框得到的绝对路径。前端传来的路径不要直接转发。
 - **正常关闭**：关闭 sidecar 的 stdin，然后等待进程退出（它需要清理临时目录）；等不到再强行结束。
 - **`internal_error`**：表示 sidecar 有 bug，可以提示用户“处理失败”，并把 stderr 的内容记录下来。
+
+## 9. 平台差异
+
+协议在 Windows、macOS、Linux 上完全一致，下面是容易踩坑的几点。
+
+- **行尾**：sidecar 不经过 `Console.Out`（它在 Windows 上会把换行写成 `\r\n`），直接把字节写到 stdout，每条消息固定以单个 `\n` 结尾，行内没有 `\r`（JSON 字符串里的控制字符都被转义了）。调用方按 `\n` 切分即可；为稳妥起见，也可以去掉行尾可能多出来的 `\r`。
+- **请求的行尾**可以是 `\n` 或 `\r\n`，输入结束前的最后一行没有行尾也会被处理。
+- **编码**：stdin、stdout、stderr 都是 UTF-8（无 BOM），sidecar 不依赖也不修改控制台代码页。
+- **路径**：`targetPath`、`targetDir` 必须是完整路径，否则返回 `invalid_params`。
+  - Windows：`C:\Users\alice\x.pdf`、`C:/Users/alice/x.pdf`、UNC 路径 `\\server\share\x.pdf`、带 `\\?\` 前缀的路径（例如 Rust 的 `canonicalize` 的结果 `\\?\C:\Users\alice\x.pdf`）都可以；没有盘符的 `\Users\alice\x.pdf` 和只有盘符的 `C:x.pdf` 算相对路径，会被拒绝。路径里 `/` 和 `\` 混用也可以。
+  - macOS、Linux：以 `/` 开头的路径。
+  - 返回的 `path` 是规范化之后的路径（`..` 已折叠，Windows 上分隔符统一为 `\`），不一定和请求里写的字符完全一样。
+- **大小写**：Windows 和 macOS 的文件系统默认不区分大小写，重名判断也就不区分（`Report.PDF` 已经存在时，`report.pdf` 会被保存成 `report (1).pdf`）；Linux 区分大小写。
+- **文件被占用**（主要是 Windows）：
+  - 保存时，刚写完的临时文件可能被杀毒软件短暂占用，目标文件也可能正被别的程序打开（例如 PDF 阅读器）。sidecar 改名遇到“文件正在使用”或“拒绝访问”时会重试，总共最多等约 0.6 秒，仍然不行才返回 `write_failed`，原文件保持不变。
+  - 退出时，某个提取出来的文件仍被外部程序打开，会话目录就删不掉。这不算错误：退出码仍然是 0，残留的目录在下一次启动时清理（那时锁文件已经释放）。
+  - 会话目录里的 `.lock` 文件以独占方式打开，别的进程打不开它；启动时清理其他会话的目录，就是靠“能不能打开这个锁文件”判断那个会话是否还活着。
+- **信号**：SIGINT/SIGTERM（Windows 上对应 Ctrl+C、关闭控制台）会走正常的退出流程；强行结束进程（`TerminateProcess`、SIGKILL）不会清理，留到下次启动。

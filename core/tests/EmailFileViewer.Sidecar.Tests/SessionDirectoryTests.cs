@@ -40,7 +40,7 @@ public class SessionDirectoryTests
         await using var session = SidecarSession.Start(new StdioOptions { SessionRoot = root });
         await session.CallAsync("system.ping");
 
-        Assert.All(leftovers, directory => Assert.False(Directory.Exists(directory), directory));
+        Assert.All(leftovers, Eventually.DirectoryIsGone);
         Assert.Single(Directory.GetDirectories(root));
         Assert.True(File.Exists(unrelated));
     }
@@ -63,7 +63,7 @@ public class SessionDirectoryTests
 
         Assert.Equal(0, code);
         Assert.True(File.Exists(Path.Combine(live, "doc1", "open-in-viewer.pdf")));
-        Assert.False(Directory.Exists(stale));
+        Eventually.DirectoryIsGone(stale);
     }
 
     [Fact]
@@ -79,8 +79,8 @@ public class SessionDirectoryTests
         var code = await session.CompleteAsync();
 
         Assert.Equal(0, code);
-        Assert.False(File.Exists(path));
-        Assert.Empty(Directory.GetDirectories(session.SessionRoot));
+        Eventually.IsTrue(() => !File.Exists(path), "提取出来的文件应该已经被删除");
+        Eventually.HasNoSubdirectories(session.SessionRoot);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class SessionDirectoryTests
 
         await session.CancelAsync();
 
-        Assert.Empty(Directory.GetDirectories(session.SessionRoot));
+        Eventually.HasNoSubdirectories(session.SessionRoot);
     }
 
     [Fact]
