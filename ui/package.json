@@ -14,6 +14,8 @@
     "themes:check": "node scripts/build-themes.ts --check",
     "contrast": "node scripts/check-contrast.ts",
     "i18n": "node scripts/check-i18n.ts",
+    "fixtures": "node scripts/generate-fixtures.ts",
+    "fixtures:check": "node scripts/generate-fixtures.ts --check",
     "preview": "vite preview"
   },
   "dependencies": {

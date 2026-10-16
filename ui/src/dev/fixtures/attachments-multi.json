@@ -1,0 +1,53 @@
+{
+  "fileName": "attachments-pdf-xlsx-jpg.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Attachments: pdf, xlsx and jpg",
+    "sentAtUtc": "2026-10-01T09:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 17:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">Three attachments: a PDF, an xlsx workbook and a JPEG photo.\n</pre>"
+    },
+    "attachments": [
+      {
+        "id": "2",
+        "fileName": "report.pdf",
+        "size": 597,
+        "mimeType": "application/pdf",
+        "isNestedEmail": false
+      },
+      {
+        "id": "3",
+        "fileName": "budget.xlsx",
+        "size": 2488,
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "isNestedEmail": false
+      },
+      {
+        "id": "4",
+        "fileName": "photo.jpg",
+        "size": 3054,
+        "mimeType": "image/jpeg",
+        "isNestedEmail": false
+      }
+    ],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

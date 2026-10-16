@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
-import { checkLocales, flatten, placeholders } from '../check.ts'
+import { checkLocales, flatten, logicalEntries, placeholders } from '../check.ts'
 import { createI18n, resources } from '../index.ts'
 import en from '../locales/en.json'
 import zhCN from '../locales/zh-CN.json'
@@ -13,17 +13,21 @@ import zhCN from '../locales/zh-CN.json'
 const uiRoot = fileURLToPath(new URL('../../../', import.meta.url))
 
 describe('界面文案资源', () => {
-  it('英文和简体中文的 key 集合完全一致', () => {
-    expect([...flatten(zhCN).entries.keys()].sort()).toEqual([...flatten(en).entries.keys()].sort())
+  // 复数 key（key_one / key_other）合并成一个逻辑 key：英文有 one + other，中文只有 other
+  const logical = (messages: unknown) => logicalEntries(flatten(messages).entries)
+
+  it('英文和简体中文的 key 集合完全一致（复数 key 按逻辑 key 比较）', () => {
+    expect([...logical(zhCN).keys()].sort()).toEqual([...logical(en).keys()].sort())
   })
 
   it('每个带插值的文案，两种语言的参数一致', () => {
-    const a = flatten(en).entries
-    const b = flatten(zhCN).entries
-    for (const [key, text] of a) expect(placeholders(b.get(key)!), key).toEqual(placeholders(text))
+    const a = logical(en)
+    const b = logical(zhCN)
+    for (const [key, entry] of a) expect([...b.get(key)!.placeholders].sort(), key).toEqual([...entry.placeholders].sort())
     // 至少有这些带参数的文案，防止检查形同虚设
-    expect(placeholders(a.get('header.more')!)).toEqual(['n'])
-    expect(placeholders(a.get('toast.partialTitle')!)).toEqual(['all', 'ok'])
+    expect([...a.get('header.more')!.placeholders]).toEqual(['n'])
+    expect([...a.get('toast.partialTitle')!.placeholders].sort()).toEqual(['all', 'ok'])
+    expect([...a.get('drop.title')!.placeholders]).toEqual(['count'])
   })
 
   it('真实资源通过完整检查', () => {
@@ -63,6 +67,21 @@ describe('checkLocales', () => {
     expect(errors.some((e) => e.includes('[en] a') && e.includes('单花括号'))).toBe(true)
     expect(errors.some((e) => e.includes('[zh-CN] b') && e.includes('为空'))).toBe(true)
     expect(errors.some((e) => e.includes('[zh-CN] c') && e.includes('必须是字符串'))).toBe(true)
+  })
+
+  it('复数 key：英文的 _one + _other 与中文只有 _other 视为一致', () => {
+    const en = { n: { x_one: 'One {{count}} file', x_other: '{{count}} files' } }
+    expect(checkLocales({ en, 'zh-CN': { n: { x_other: '{{count}} 个文件' } } }, 'en')).toEqual([])
+  })
+
+  it('复数 key 缺少 _other、整组缺失、参数不一致都会报错', () => {
+    const en = { n: { x_one: 'One {{count}} file', x_other: '{{count}} files' } }
+    const noOther = checkLocales({ en, 'zh-CN': { n: { x_one: '{{count}} 个文件' } } }, 'en')
+    expect(noOther.some((e) => e.includes('[zh-CN]') && e.includes('n.x') && e.includes('_other'))).toBe(true)
+    const missing = checkLocales({ en, 'zh-CN': { n: { y: 'z' } } }, 'en')
+    expect(missing).toContain('[zh-CN] 缺少 key: n.x')
+    const renamed = checkLocales({ en, 'zh-CN': { n: { x_other: '{{n}} 个文件' } } }, 'en')
+    expect(renamed.some((e) => e.includes('n.x') && e.includes('插值参数'))).toBe(true)
   })
 
   it('缺少基准语言时报错', () => {
@@ -118,6 +137,14 @@ describe('createI18n', () => {
     const i18n = createI18n('en')
     expect(i18n.t('executable.title', { name: 'a&b <1>.exe' })).toBe('“a&b <1>.exe” can\'t be opened here')
     expect(createI18n('zh-CN').t('toast.partialTitle', { ok: 2, all: 3 })).toBe('已打开 3 个文件中的 2 个')
+  })
+
+  it('复数：英文按 count 选 one / other，中文只有一种形式', () => {
+    const en = createI18n('en')
+    expect(en.t('drop.title', { count: 1 })).toBe('Release to open 1 file')
+    expect(en.t('drop.title', { count: 3 })).toBe('Release to open 3 files')
+    expect(createI18n('zh-CN').t('drop.title', { count: 1 })).toBe('松开以打开 1 个文件')
+    expect(createI18n('zh-CN').t('drop.title', { count: 3 })).toBe('松开以打开 3 个文件')
   })
 
   it('切换语言立即生效', async () => {

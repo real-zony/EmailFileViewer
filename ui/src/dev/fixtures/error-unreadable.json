@@ -1,0 +1,7 @@
+{
+  "fileName": "does-not-exist.eml",
+  "error": {
+    "code": "unreadable",
+    "message": "无法读取文件 does-not-exist.eml：Could not find file '/Users/zony/.superset/worktrees/EmailFileViewer/lush-muskox-3836056a/samples/invalid/does-not-exist.eml'."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "fileName": "html-malicious.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Probe Sender",
+        "address": "probe@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Malicious HTML probe (harmless)",
+    "sentAtUtc": "2026-10-01T07:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 15:00:00 +0800",
+    "body": {
+      "sourceFormat": "Html",
+      "html": "\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>Malicious HTML probe</title>\n\n\n<link rel=\"stylesheet\" href=\"https://efv-probe.invalid/probe.css\">\n</head>\n<body>\n<h1>Sandbox probe</h1>\n<p id=\"efv-marker-start\">MARKER-START: the rest of the body must still be shown.</p>\n<p id=\"efv-script-result\">NO-SCRIPT-RAN</p>\n\n\n\n<p><img src=\"x\" alt=\"broken image\"></p>\n<svg width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\"/></svg>\n<div>Event attributes on a div (onclick, onmouseover)</div>\n<input autofocus value=\"autofocus input\">\n<p><a>javascript: link</a></p>\n<p><a>mixed-case javascript: link</a></p>\n<p><a href=\"https://example.com/ok\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/ok\">A normal https link that should keep working</a></p>\n\n<form method=\"post\">\n  <input type=\"text\" name=\"q\" value=\"form field\">\n  <input type=\"submit\" value=\"Submit form\">\n</form>\n\n\n\n\n\n\n<p id=\"efv-marker-end\">MARKER-END: reached the end of the body.</p>\n</body>\n</html>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": true
+  }
+}

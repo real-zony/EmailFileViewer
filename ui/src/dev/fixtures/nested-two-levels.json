@@ -1,0 +1,121 @@
+{
+  "fileName": "nested-rfc822-two-levels.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Level 1 (outer) message with two nested levels",
+    "sentAtUtc": "2026-10-01T02:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 10:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This is the outer message (level 1). It carries the level 2 message as a message/rfc822 part.\n</pre>"
+    },
+    "attachments": [
+      {
+        "id": "2",
+        "fileName": "Level 2 (middle) message.eml",
+        "size": 1183,
+        "mimeType": "message/rfc822",
+        "isNestedEmail": true
+      }
+    ],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  },
+  "nested": {
+    "2": {
+      "fileName": "Level 2 (middle) message.eml",
+      "document": {
+        "from": [
+          {
+            "name": "Carol Wang",
+            "address": "carol.wang@example.net"
+          }
+        ],
+        "to": [
+          {
+            "name": "Bob Li",
+            "address": "bob.li@example.org"
+          }
+        ],
+        "cc": [],
+        "bcc": [],
+        "replyTo": [],
+        "subject": "Level 2 (middle) message",
+        "sentAtUtc": "2026-10-01T01:00:00Z",
+        "dateHeaderRaw": "Thu, 01 Oct 2026 09:00:00 +0800",
+        "body": {
+          "sourceFormat": "PlainText",
+          "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This is the middle message (level 2). It carries the level 3 message as a message/rfc822 part.\n</pre>"
+        },
+        "attachments": [
+          {
+            "id": "2",
+            "fileName": "Level 3 (innermost) message.eml",
+            "size": 634,
+            "mimeType": "message/rfc822",
+            "isNestedEmail": true
+          }
+        ],
+        "isSigned": false,
+        "isEncrypted": false,
+        "hasRemoteContent": false
+      },
+      "nested": {
+        "2": {
+          "fileName": "Level 3 (innermost) message.eml",
+          "document": {
+            "from": [
+              {
+                "name": "Dave Chen",
+                "address": "dave.chen@example.com"
+              }
+            ],
+            "to": [
+              {
+                "name": "Carol Wang",
+                "address": "carol.wang@example.net"
+              }
+            ],
+            "cc": [],
+            "bcc": [],
+            "replyTo": [],
+            "subject": "Level 3 (innermost) message",
+            "sentAtUtc": "2026-10-01T00:00:00Z",
+            "dateHeaderRaw": "Thu, 01 Oct 2026 08:00:00 +0800",
+            "body": {
+              "sourceFormat": "PlainText",
+              "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This is the innermost message (level 3). It has its own attachment.\n</pre>"
+            },
+            "attachments": [
+              {
+                "id": "2",
+                "fileName": "level3-note.txt",
+                "size": 42,
+                "mimeType": "text/plain",
+                "isNestedEmail": false
+              }
+            ],
+            "isSigned": false,
+            "isEncrypted": false,
+            "hasRemoteContent": false
+          }
+        }
+      }
+    }
+  }
+}

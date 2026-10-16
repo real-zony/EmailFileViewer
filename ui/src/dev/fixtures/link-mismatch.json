@@ -1,0 +1,31 @@
+{
+  "fileName": "link-text-mismatch.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Account Notice",
+        "address": "notice@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Verify your account (link text does not match target)",
+    "sentAtUtc": "2026-10-01T08:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 16:00:00 +0800",
+    "body": {
+      "sourceFormat": "Html",
+      "html": "<html><body>\n<p>Dear customer, please verify your account.</p>\n<p>1. Domain-only text: <a href=\"https://example.com/not-paypal\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/not-paypal\">paypal.com</a></p>\n<p>2. URL text with a different host: <a href=\"https://example.com/not-paypal\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/not-paypal\">https://www.paypal.com/signin</a></p>\n<p>3. Spoofed title attribute: <a href=\"https://example.com/not-paypal\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/not-paypal\">Hover me</a></p>\n<p>4. Control, text equals target: <a href=\"https://example.com/\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/\">https://example.com/</a></p>\n</body></html>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

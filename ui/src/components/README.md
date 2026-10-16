@@ -80,7 +80,7 @@ import { AttachmentList, BodySheet, MessageHeader } from './components/index.ts'
 ### `MessageHeader`、`AddressRow`、`AddressText`
 
 - props：
-  - `MessageHeader { subject, showFullSubjectLabel, showLessSubjectLabel, fromLabel, from, dateLabel, dateText, dateTime, dateTitle?, children?, badges? }`
+  - `MessageHeader { subject?, showFullSubjectLabel, showLessSubjectLabel, fromLabel, from?, dateLabel, dateText?, dateTime?, dateTitle?, children?, badges? }`：`subject`、`from`（一个地址或地址数组）、`dateText` 缺失或为空时，对应的标题或整行不渲染
   - `AddressRow { label, addresses, collapseAfter = 3, moreLabel(n), lessLabel, defaultExpanded? }`
 - `dateText` 是调用方按界面语言和本地时区格式化好的文字（7.4），`dateTime` 是 ISO 值，`dateTitle` 是原始 Date 头。
 - `children` 里放 `AddressRow`（顺序：回复至、收件人、抄送、密送）。`AddressRow` 渲染为两个网格单元，**必须放在 `MessageHeader` 里**。没有地址时整行不渲染。

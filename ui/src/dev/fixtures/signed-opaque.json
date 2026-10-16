@@ -1,0 +1,39 @@
+{
+  "fileName": "smime-signed-opaque.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "S/MIME opaque-signed message",
+    "sentAtUtc": "2026-10-01T14:30:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 22:30:00 +0800",
+    "body": {
+      "sourceFormat": "Html",
+      "html": "<html><body><h1>OPAQUE-SIGNED-HTML</h1><p>The body and the attachment of this message are wrapped inside the <b>signature</b>.</p></body></html>"
+    },
+    "attachments": [
+      {
+        "id": "2",
+        "fileName": "signed-report.pdf",
+        "size": 612,
+        "mimeType": "application/pdf",
+        "isNestedEmail": false
+      }
+    ],
+    "isSigned": true,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

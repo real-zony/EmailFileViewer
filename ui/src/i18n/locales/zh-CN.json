@@ -18,7 +18,11 @@
   "tabs": {
     "label": "已打开的文件",
     "new": "打开文件",
-    "close": "关闭标签页"
+    "close": "关闭标签页",
+    "closeNamed": "关闭 {{name}}"
+  },
+  "breadcrumbs": {
+    "label": "邮件层级"
   },
   "header": {
     "from": "发件人",
@@ -42,6 +46,7 @@
     "open": "打开",
     "openMessageTip": "在当前标签页中逐层打开",
     "emailKind": "邮件",
+    "unnamed": "未命名的附件",
     "saveOnly": "仅可保存",
     "showAll": "显示全部 {{n}} 个",
     "showFewer": "收起"
@@ -52,7 +57,8 @@
     "format": {
       "html": "HTML",
       "text": "纯文本",
-      "rtf": "RTF"
+      "rtf": "RTF",
+      "none": "无正文"
     }
   },
   "remote": {
@@ -81,7 +87,7 @@
     "privacy": "邮件只在本机读取。除非你主动选择，否则不会上传任何内容。"
   },
   "drop": {
-    "title": "松开以打开 {{n}} 个文件",
+    "title_other": "松开以打开 {{count}} 个文件",
     "body": "每个文件在单独的标签页中打开。拖入的文字和链接会被忽略。"
   },
   "error": {
@@ -100,13 +106,26 @@
       "title": "无法读取这个文件",
       "body": "文件可能已被移动或删除，或者你没有打开它的权限。"
     },
+    "generic": {
+      "reason": "出错了",
+      "title": "无法打开这个文件",
+      "body": "发生了意外错误，EmailFileViewer 没能打开这个文件。关闭此标签页后再试一次；如果仍然失败，文件可能已损坏。"
+    },
     "tryAgain": "重试",
     "openAnother": "打开其他文件"
   },
   "toast": {
     "label": "通知",
     "partialTitle": "已打开 {{all}} 个文件中的 {{ok}} 个",
-    "partialText": "{{name}} 无法打开：文件已损坏。"
+    "failedLine": "<file/> — {{reason}}",
+    "more": "另外 {{n}} 个",
+    "dialogFailed": "无法打开文件对话框",
+    "openNestedFailed": "无法将 {{name}} 作为邮件打开",
+    "openFailed": "无法打开 {{name}}",
+    "saveFailed": "无法保存 {{name}}",
+    "saveAllFailed": "无法保存附件",
+    "savedAll_other": "已保存 {{count}} 个附件",
+    "savedSome": "已保存 {{total}} 个附件中的 {{saved}} 个"
   },
   "executable": {
     "title": "无法在此打开“{{name}}”",
@@ -132,5 +151,16 @@
     "license": "许可",
     "licenseValue": "MIT · 免费开源",
     "source": "源代码"
+  },
+  "reason": {
+    "write_failed": "无法写入到那里。请确认文件夹存在、你有写入权限，并且磁盘空间足够。",
+    "document_not_found": "这封邮件已经不再打开。请关闭标签页后重新打开文件。",
+    "attachment_not_found": "邮件里已经没有这个附件了。",
+    "not_nested_email": "这个附件不是邮件。",
+    "unsupported_format": "这个附件不是有效的邮件。",
+    "corrupted": "附件已损坏，或无法读取。",
+    "unreadable": "无法读取这个文件。",
+    "dialog_failed": "无法显示系统对话框。",
+    "generic": "出了点问题，请再试一次。"
   }
 }

@@ -1,0 +1,35 @@
+{
+  "fileName": "headers-rfc2047.eml",
+  "document": {
+    "from": [
+      {
+        "name": "李 Li 明 (Ming)",
+        "address": "li.ming@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Müller 先生",
+        "address": "mueller@example.org"
+      },
+      {
+        "name": "Carol Wang",
+        "address": "carol.wang@example.net"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "月度报告 Report （含附件 — résumé）",
+    "sentAtUtc": "2026-10-01T02:25:00Z",
+    "dateHeaderRaw": "Thu, 1 Oct 2026 10:25:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">Expected subject: 月度报告 Report （含附件 — résumé）\nExpected sender name: 李 Li 明 (Ming)\nExpected first recipient name: Müller 先生\n</pre>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

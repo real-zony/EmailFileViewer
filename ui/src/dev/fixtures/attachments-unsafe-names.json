@@ -1,0 +1,81 @@
+{
+  "fileName": "attachments-unsafe-names.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Carol Wang",
+        "address": "carol.wang@example.net"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Attachments with unsafe file names",
+    "sentAtUtc": "2026-10-01T10:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 18:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">Every attachment has harmless placeholder text. Only the file names are hostile.\n</pre>"
+    },
+    "attachments": [
+      {
+        "id": "2",
+        "fileName": "../../.bashrc",
+        "size": 54,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "3",
+        "fileName": "..\\..\\Windows\\evil.txt",
+        "size": 63,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "4",
+        "fileName": "/tmp/absolute-path.txt",
+        "size": 63,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "5",
+        "fileName": "CON.txt",
+        "size": 48,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "6",
+        "fileName": "NUL",
+        "size": 44,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "7",
+        "fileName": "a:b*c?.txt",
+        "size": 51,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "8",
+        "fileName": "x<y>z|w.txt",
+        "size": 52,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      }
+    ],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

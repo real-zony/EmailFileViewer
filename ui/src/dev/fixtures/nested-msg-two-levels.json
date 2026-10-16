@@ -1,0 +1,121 @@
+{
+  "fileName": "nested-msg-two-levels.msg",
+  "document": {
+    "from": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Level 1 (outer) MSG with two nested levels",
+    "sentAtUtc": "2026-09-30T10:00:00Z",
+    "dateHeaderRaw": null,
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This is the outer message (level 1). It carries the level 2 message as an embedded message.\n</pre>"
+    },
+    "attachments": [
+      {
+        "id": "a0",
+        "fileName": "Level 2 (middle) MSG.msg",
+        "size": 18944,
+        "mimeType": "application/vnd.ms-outlook",
+        "isNestedEmail": true
+      }
+    ],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  },
+  "nested": {
+    "a0": {
+      "fileName": "Level 2 (middle) MSG.msg",
+      "document": {
+        "from": [
+          {
+            "name": "Carol Wang",
+            "address": "carol.wang@example.net"
+          }
+        ],
+        "to": [
+          {
+            "name": "Bob Li",
+            "address": "bob.li@example.org"
+          }
+        ],
+        "cc": [],
+        "bcc": [],
+        "replyTo": [],
+        "subject": "Level 2 (middle) MSG",
+        "sentAtUtc": "2026-09-30T09:00:00Z",
+        "dateHeaderRaw": null,
+        "body": {
+          "sourceFormat": "PlainText",
+          "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This is the middle message (level 2). It carries the level 3 message as an embedded message.\n</pre>"
+        },
+        "attachments": [
+          {
+            "id": "a0",
+            "fileName": "Level 3 (innermost) MSG.msg",
+            "size": 10752,
+            "mimeType": "application/vnd.ms-outlook",
+            "isNestedEmail": true
+          }
+        ],
+        "isSigned": false,
+        "isEncrypted": false,
+        "hasRemoteContent": false
+      },
+      "nested": {
+        "a0": {
+          "fileName": "Level 3 (innermost) MSG.msg",
+          "document": {
+            "from": [
+              {
+                "name": "Dave Chen",
+                "address": "dave.chen@example.com"
+              }
+            ],
+            "to": [
+              {
+                "name": "Carol Wang",
+                "address": "carol.wang@example.net"
+              }
+            ],
+            "cc": [],
+            "bcc": [],
+            "replyTo": [],
+            "subject": "Level 3 (innermost) MSG",
+            "sentAtUtc": "2026-09-30T08:00:00Z",
+            "dateHeaderRaw": null,
+            "body": {
+              "sourceFormat": "PlainText",
+              "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This is the innermost message (level 3). It has its own attachment.\n</pre>"
+            },
+            "attachments": [
+              {
+                "id": "a0",
+                "fileName": "level3-note.txt",
+                "size": 41,
+                "mimeType": "text/plain",
+                "isNestedEmail": false
+              }
+            ],
+            "isSigned": false,
+            "isEncrypted": false,
+            "hasRemoteContent": false
+          }
+        }
+      }
+    }
+  }
+}

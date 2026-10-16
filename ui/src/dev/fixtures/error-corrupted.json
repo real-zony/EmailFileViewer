@@ -1,0 +1,7 @@
+{
+  "fileName": "truncated.msg",
+  "error": {
+    "code": "corrupted",
+    "message": "MSG 文件的结构已损坏，无法解析。"
+  }
+}

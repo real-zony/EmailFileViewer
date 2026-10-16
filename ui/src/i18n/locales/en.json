@@ -18,7 +18,11 @@
   "tabs": {
     "label": "Open files",
     "new": "Open file",
-    "close": "Close tab"
+    "close": "Close tab",
+    "closeNamed": "Close {{name}}"
+  },
+  "breadcrumbs": {
+    "label": "Message levels"
   },
   "header": {
     "from": "From",
@@ -42,6 +46,7 @@
     "open": "Open",
     "openMessageTip": "Opens here, in a new level of this tab",
     "emailKind": "Email",
+    "unnamed": "Unnamed attachment",
     "saveOnly": "Save only",
     "showAll": "Show all {{n}}",
     "showFewer": "Show fewer"
@@ -52,7 +57,8 @@
     "format": {
       "html": "HTML",
       "text": "Plain text",
-      "rtf": "RTF"
+      "rtf": "RTF",
+      "none": "No body"
     }
   },
   "remote": {
@@ -81,7 +87,8 @@
     "privacy": "Messages are read on this computer. Nothing is uploaded unless you choose to."
   },
   "drop": {
-    "title": "Release to open {{n}} files",
+    "title_one": "Release to open {{count}} file",
+    "title_other": "Release to open {{count}} files",
     "body": "Each file opens in its own tab. Text and links are ignored."
   },
   "error": {
@@ -100,13 +107,27 @@
       "title": "This file can't be read",
       "body": "It may have been moved or deleted, or you may not have permission to open it."
     },
+    "generic": {
+      "reason": "Something went wrong",
+      "title": "This file couldn't be opened",
+      "body": "An unexpected error stopped EmailFileViewer from opening this file. Close this tab and try again; if it keeps happening, the file may be damaged."
+    },
     "tryAgain": "Try again",
     "openAnother": "Open another file"
   },
   "toast": {
     "label": "Notifications",
     "partialTitle": "Opened {{ok}} of {{all}} files",
-    "partialText": "{{name}} couldn't be opened: the file is damaged."
+    "failedLine": "<file/> — {{reason}}",
+    "more": "+{{n}} more",
+    "dialogFailed": "Couldn't open the file dialog",
+    "openNestedFailed": "Couldn't open {{name}} as an email",
+    "openFailed": "Couldn't open {{name}}",
+    "saveFailed": "Couldn't save {{name}}",
+    "saveAllFailed": "Couldn't save the attachments",
+    "savedAll_one": "Saved {{count}} attachment",
+    "savedAll_other": "Saved {{count}} attachments",
+    "savedSome": "Saved {{saved}} of {{total}} attachments"
   },
   "executable": {
     "title": "“{{name}}” can't be opened here",
@@ -132,5 +153,16 @@
     "license": "License",
     "licenseValue": "MIT · free and open source",
     "source": "Source code"
+  },
+  "reason": {
+    "write_failed": "It couldn't be written there. Check that the folder exists, that you have permission to write to it, and that the disk isn't full.",
+    "document_not_found": "This message is no longer open. Close the tab and open the file again.",
+    "attachment_not_found": "This attachment isn't in the message any more.",
+    "not_nested_email": "This attachment isn't an email.",
+    "unsupported_format": "This attachment isn't a valid email.",
+    "corrupted": "The attachment is damaged or can't be read.",
+    "unreadable": "The file can't be read.",
+    "dialog_failed": "The system dialog could not be shown.",
+    "generic": "Something went wrong. Try again."
   }
 }

@@ -1,0 +1,39 @@
+{
+  "fileName": "tnef-winmail-docx.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Outlook winmail.dat carrying a docx",
+    "sentAtUtc": "2026-10-01T13:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 21:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">The only attachment of this message is winmail.dat. It contains a docx file (meeting-minutes.docx).\n</pre>"
+    },
+    "attachments": [
+      {
+        "id": "2.t1",
+        "fileName": "meeting-minutes.docx",
+        "size": 1528,
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "isNestedEmail": false
+      }
+    ],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

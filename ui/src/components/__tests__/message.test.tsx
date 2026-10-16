@@ -101,6 +101,29 @@ describe('MessageHeader', () => {
     render(<MessageHeader {...base} badges={<BadgeList><Badge icon="lock">Encrypted</Badge></BadgeList>} />)
     expect(screen.getByText('Encrypted')).toBeInTheDocument()
   })
+
+  it('缺失的字段整行隐藏：没有主题、发件人、日期时对应的标题和行都不渲染', () => {
+    const { container } = render(<MessageHeader showFullSubjectLabel="Show full subject" showLessSubjectLabel="Show less" fromLabel="From" dateLabel="Date" />)
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+    expect(screen.queryByText('From')).not.toBeInTheDocument()
+    expect(screen.queryByText('Date')).not.toBeInTheDocument()
+    expect(container.querySelector('time')).toBeNull()
+    expect(container.querySelector('.hgrid')).toBeEmptyDOMElement()
+  })
+
+  it('发件人可以是多个地址，空数组等于没有发件人', () => {
+    const { container, rerender } = render(<MessageHeader {...base} from={[{ name: 'A', address: 'a@x.example' }, { address: 'b@x.example' }]} />)
+    expect(container.querySelectorAll('.addr--from')).toHaveLength(2)
+    rerender(<MessageHeader {...base} from={[]} />)
+    expect(screen.queryByText('From')).not.toBeInTheDocument()
+    expect(screen.getByText(base.dateText)).toBeInTheDocument()
+  })
+
+  it('没有日期时不显示日期行，发件人行不受影响', () => {
+    render(<MessageHeader {...base} dateText={undefined} dateTime={undefined} dateTitle={undefined} />)
+    expect(screen.queryByText('Date')).not.toBeInTheDocument()
+    expect(screen.getByText('From')).toBeInTheDocument()
+  })
 })
 
 describe('Badge', () => {

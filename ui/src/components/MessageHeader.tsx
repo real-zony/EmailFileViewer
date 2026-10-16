@@ -3,16 +3,18 @@ import { AddressText, type Address } from './Address.tsx'
 import { cx } from './cx.ts'
 
 export interface MessageHeaderProps {
-  subject: string
+  /** 缺失（没有或为空）时不显示主题 */
+  subject?: string
   showFullSubjectLabel: string
   showLessSubjectLabel: string
   fromLabel: string
-  from: Address
+  /** 发件人（可能不止一个）；缺失或为空时整行不显示 */
+  from?: Address | readonly Address[]
   dateLabel: string
-  /** 已按界面语言和本地时区格式化好的日期 */
-  dateText: string
+  /** 已按界面语言和本地时区格式化好的日期；缺失时整行不显示 */
+  dateText?: string
   /** <time datetime> 的 ISO 值 */
-  dateTime: string
+  dateTime?: string
   /** 悬停提示：原始 Date 头 */
   dateTitle?: string
   /** 其余地址行：AddressRow（回复至、收件人、抄送、密送） */
@@ -23,7 +25,8 @@ export interface MessageHeaderProps {
 
 // 邮件头：主题（超过两行时折叠）、发件人、日期、地址行、徽标。
 export function MessageHeader(props: MessageHeaderProps) {
-  const { subject, from, children, badges } = props
+  const { subject, children, badges } = props
+  const senders = props.from === undefined ? [] : 'address' in props.from ? [props.from] : props.from
   const subjectRef = useRef<HTMLHeadingElement>(null)
   const [overflowing, setOverflowing] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -42,25 +45,37 @@ export function MessageHeader(props: MessageHeaderProps) {
 
   return (
     <header className="msghead">
-      <div className="subject-wrap">
-        <h1 ref={subjectRef} className={cx('subject', !expanded && 'subject--clamped')} title={subject}>
-          {subject}
-        </h1>
-        {(overflowing || expanded) && (
-          <button type="button" className="btn btn--link addr-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-            {expanded ? props.showLessSubjectLabel : props.showFullSubjectLabel}
-          </button>
-        )}
-      </div>
+      {subject && (
+        <div className="subject-wrap">
+          <h1 ref={subjectRef} className={cx('subject', !expanded && 'subject--clamped')} title={subject}>
+            {subject}
+          </h1>
+          {(overflowing || expanded) && (
+            <button type="button" className="btn btn--link addr-more" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+              {expanded ? props.showLessSubjectLabel : props.showFullSubjectLabel}
+            </button>
+          )}
+        </div>
+      )}
       <div className="hgrid">
-        <span className="hlabel">{props.fromLabel}</span>
-        <span className="hvalue">
-          <AddressText address={from} emphasis />
-        </span>
-        <span className="hlabel hlabel--date">{props.dateLabel}</span>
-        <time className="hdate" dateTime={props.dateTime} title={props.dateTitle}>
-          {props.dateText}
-        </time>
+        {senders.length > 0 && (
+          <>
+            <span className="hlabel">{props.fromLabel}</span>
+            <span className="hvalue">
+              {senders.map((sender, i) => (
+                <AddressText key={`${sender.address}-${i}`} address={sender} emphasis />
+              ))}
+            </span>
+          </>
+        )}
+        {props.dateText && (
+          <>
+            <span className="hlabel hlabel--date">{props.dateLabel}</span>
+            <time className="hdate" dateTime={props.dateTime} title={props.dateTitle}>
+              {props.dateText}
+            </time>
+          </>
+        )}
         {children}
       </div>
       {badges}

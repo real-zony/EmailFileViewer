@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import { createViewerApi } from './api/index.ts'
 import { createSettingsStore, createWindowControl } from './platform/tauri.ts'
 import { applyDocumentSettings } from './settings/appearance.ts'
 import { readInitialSettings } from './settings/initial.ts'
@@ -24,9 +25,12 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('show
     )
   })
 } else {
-  root.render(
-    <StrictMode>
-      <App initialSettings={initialSettings} store={createSettingsStore()} windowControl={createWindowControl()} />
-    </StrictMode>,
-  )
+  // 在 Tauri 中是真实实现；浏览器里 `npm run dev` 是用 dev/fixtures 驱动的模拟实现
+  void createViewerApi().then((api) => {
+    root.render(
+      <StrictMode>
+        <App initialSettings={initialSettings} store={createSettingsStore()} windowControl={createWindowControl()} api={api} />
+      </StrictMode>,
+    )
+  })
 }

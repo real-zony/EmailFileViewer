@@ -1,0 +1,41 @@
+{
+  "fileName": "headers-timezone-bcc-replyto-no-cc.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "cc": [],
+    "bcc": [
+      {
+        "name": "Erin Xu",
+        "address": "erin.xu@example.org"
+      }
+    ],
+    "replyTo": [
+      {
+        "name": "Alice Zhang (Support)",
+        "address": "support@example.com"
+      }
+    ],
+    "subject": "Cross-timezone date, Bcc and Reply-To, no Cc",
+    "sentAtUtc": "2026-10-05T16:00:00Z",
+    "dateHeaderRaw": "Mon, 5 Oct 2026 09:00:00 -0700",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">Sent at Mon, 5 Oct 2026 09:00:00 -0700.\nIn a UTC+8 time zone this is 2026-10-06 00:00.\nThis message has Bcc and Reply-To headers but no Cc header.\n</pre>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

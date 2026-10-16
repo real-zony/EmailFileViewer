@@ -34,19 +34,51 @@ function strayBraces(text: string): boolean {
   return /[{}]/.test(text.replace(/\{\{[^{}]*\}\}/g, ''))
 }
 
+// 复数形式：i18next 用 key_one / key_other 这样的后缀区分，不同语言需要的形式不同（英文 one + other，中文只有 other）。
+// 比较 key 时把它们合并成同一个逻辑 key；参数取各形式的并集，并要求每个复数 key 都有 _other（i18next 的兜底形式）。
+const PLURAL_SUFFIX = /^(.+)_(zero|one|two|few|many|other)$/
+
+export interface Entry {
+  key: string
+  text: string
+  /** 该逻辑 key 下全部形式的后缀；普通 key 为空 */
+  forms: Set<string>
+  placeholders: Set<string>
+}
+
+export function logicalEntries(entries: Map<string, string>): Map<string, Entry> {
+  const logical = new Map<string, Entry>()
+  for (const [key, text] of entries) {
+    const m = PLURAL_SUFFIX.exec(key)
+    const name = m ? m[1] : key
+    let entry = logical.get(name)
+    if (!entry) {
+      entry = { key: name, text, forms: new Set(), placeholders: new Set() }
+      logical.set(name, entry)
+    }
+    if (m) entry.forms.add(m[2])
+    for (const p of placeholders(text)) entry.placeholders.add(p)
+  }
+  return logical
+}
+
 export function checkLocales(locales: Record<string, unknown>, reference: string): string[] {
   const errors: string[] = []
   if (!(reference in locales)) return [`缺少基准语言 ${reference} 的资源文件`]
 
-  const flat = new Map<string, Map<string, string>>()
+  const flat = new Map<string, Map<string, Entry>>()
   for (const [lang, messages] of Object.entries(locales)) {
     const { entries, problems } = flatten(messages)
     for (const p of problems) errors.push(`[${lang}] ${p}`)
-    flat.set(lang, entries)
     for (const [key, text] of entries) {
       if (text.trim() === '') errors.push(`[${lang}] ${key}: 文案为空`)
       if (strayBraces(text)) errors.push(`[${lang}] ${key}: 含有单花括号，插值请写成 {{name}}`)
     }
+    const logical = logicalEntries(entries)
+    for (const entry of logical.values()) {
+      if (entry.forms.size > 0 && !entry.forms.has('other')) errors.push(`[${lang}] ${entry.key}: 复数 key 缺少 _other 形式`)
+    }
+    flat.set(lang, logical)
   }
 
   const base = flat.get(reference)!
@@ -58,11 +90,11 @@ export function checkLocales(locales: Record<string, unknown>, reference: string
     for (const key of entries.keys()) {
       if (!base.has(key)) errors.push(`[${lang}] 多出的 key（${reference} 中没有）: ${key}`)
     }
-    for (const [key, text] of entries) {
-      const baseText = base.get(key)
-      if (baseText === undefined) continue
-      const a = placeholders(baseText).join(', ')
-      const b = placeholders(text).join(', ')
+    for (const [key, entry] of entries) {
+      const baseEntry = base.get(key)
+      if (baseEntry === undefined) continue
+      const a = [...baseEntry.placeholders].sort().join(', ')
+      const b = [...entry.placeholders].sort().join(', ')
       if (a !== b) errors.push(`[${lang}] ${key}: 插值参数与 ${reference} 不一致（${reference}: ${a || '无'}；${lang}: ${b || '无'}）`)
     }
   }
