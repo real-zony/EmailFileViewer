@@ -63,6 +63,27 @@ internal static class MsgEmailMapper
 
         var (isSigned, isEncrypted) = GetSmimeFlags(message, smime);
 
+        // 不透明签名的 MSG 把正文和附件包在 smime.p7m 的 CMS 数据里，取出来当作邮件内容映射；取不出来就只有邮件头和签名标志
+        if (isSigned && smime == MsgSmimeKind.OpaqueOrEncrypted && TryLoadOpaqueSignedContent(message) is { } signedEntity)
+        {
+            resources.Add(signedEntity);
+            var signedContent = MimeEmailMapper.MapContent(signedEntity, signedDepth: 1);
+            resources.AddRange(signedContent.Resources);
+            if (signedContent.Body.Body.SourceFormat != BodyFormat.None)
+            {
+                body = signedContent.Body;
+                hasRemoteContent = signedContent.Body.HasRemoteContent;
+            }
+
+            foreach (var source in signedContent.Listed)
+            {
+                listed.Add(source);
+                attachments[source.Id] = source;
+            }
+
+            isEncrypted |= signedContent.IsEncrypted;
+        }
+
         var document = new EmailDocument
         {
             From = MapSender(message),
@@ -103,6 +124,15 @@ internal static class MsgEmailMapper
         {
             return null;
         }
+    }
+
+    // smime.p7m 的内容是 CMS signedData，被签名的内容是一个 MIME 实体
+    private static MimeEntity? TryLoadOpaqueSignedContent(MsgStorageMessage message)
+    {
+        var carrier = message.Attachments
+            .OfType<MsgStorageAttachment>()
+            .FirstOrDefault(a => string.Equals(a.FileName, SmimeCarrierFileName, StringComparison.OrdinalIgnoreCase));
+        return carrier?.Data is { Length: > 0 } data ? SignedContent.TryRead(data) : null;
     }
 
     private static (List<AttachmentSource> Sources, List<InlineCandidate> Candidates) CollectAttachments(MsgStorageMessage message, MsgSmimeKind smime)

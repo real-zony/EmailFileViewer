@@ -46,6 +46,21 @@ public static class AttachmentFileNames
 
         // Linux
         ".sh", ".desktop", ".appimage", ".run",
+
+        // 其他会执行代码的脚本和配置
+        ".jar", ".vbe", ".ws", ".wsh", ".psm1", ".psd1", ".ps1xml", ".reg", ".msc",
+
+        // 快捷方式
+        ".scf", ".url", ".pif",
+
+        // 安装包
+        ".msix", ".msixbundle", ".appx", ".appxbundle", ".appinstaller", ".application",
+
+        // Excel 加载项
+        ".xll",
+
+        // 可挂载的磁盘映像
+        ".iso", ".img", ".vhd", ".vhdx",
     };
 
     /// <summary>

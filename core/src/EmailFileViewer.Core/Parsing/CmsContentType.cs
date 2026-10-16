@@ -6,7 +6,7 @@ namespace EmailFileViewer.Core.Parsing;
 /// 只看 CMS（PKCS#7）数据最外层的内容类型，用来区分“签名”和“加密”。不验证签名，也不解密。
 /// </summary>
 /// <remarks>
-/// 不用 System.Security.Cryptography.Pkcs 的 <c>SignedCms</c>：它会解析证书，MsgReader 的 S/MIME 路径更会联网验证证书链。
+/// 只读最外层的类型，不解码整个结构。取出被签名的内容见 <see cref="SignedContent"/>；这两处都不验证签名，也不建证书链。
 /// </remarks>
 internal static class CmsContentType
 {

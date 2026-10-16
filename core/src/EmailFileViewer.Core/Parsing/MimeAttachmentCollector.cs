@@ -20,13 +20,15 @@ internal sealed class MimeAttachmentCollector
 
     private readonly ISet<MimeEntity> _bodyParts;
     private readonly MimePart? _carrier;
+    private readonly IReadOnlyDictionary<MimePart, string> _segmentImageContentIds;
     private readonly List<AttachmentSource> _sources = [];
     private readonly List<InlineCandidate> _candidates = [];
 
-    private MimeAttachmentCollector(ISet<MimeEntity> bodyParts, MimePart? carrier)
+    private MimeAttachmentCollector(ISet<MimeEntity> bodyParts, MimePart? carrier, IReadOnlyDictionary<MimePart, string> segmentImageContentIds)
     {
         _bodyParts = bodyParts;
         _carrier = carrier;
+        _segmentImageContentIds = segmentImageContentIds;
     }
 
     /// <summary>
@@ -35,13 +37,15 @@ internal sealed class MimeAttachmentCollector
     /// <param name="body">邮件的顶层 MIME 实体。</param>
     /// <param name="bodyParts">已经被选作正文的文本部分。</param>
     /// <param name="carrier">承载 S/MIME 内容的 pkcs7-mime 部分，没有时为 <c>null</c>。</param>
+    /// <param name="segmentImageContentIds">拼接进正文的内嵌图片，以及给它们分配的临时 Content-ID；这些图片除了自己的 Content-ID，还可以用临时值引用。</param>
     /// <returns>按结构顺序排列的附件来源，以及可被正文引用的内嵌资源。</returns>
     internal static (IReadOnlyList<AttachmentSource> Sources, IReadOnlyList<InlineCandidate> Candidates) Collect(
         MimeEntity? body,
         ISet<MimeEntity> bodyParts,
-        MimePart? carrier)
+        MimePart? carrier,
+        IReadOnlyDictionary<MimePart, string> segmentImageContentIds)
     {
-        var collector = new MimeAttachmentCollector(bodyParts, carrier);
+        var collector = new MimeAttachmentCollector(bodyParts, carrier, segmentImageContentIds);
         if (body is not null)
         {
             collector.Walk(body, body is Multipart ? string.Empty : "1");
@@ -97,6 +101,11 @@ internal sealed class MimeAttachmentCollector
         if (!string.IsNullOrWhiteSpace(part.ContentId))
         {
             _candidates.Add(new InlineCandidate(source, part.ContentId, AllowNameLookup: false));
+        }
+
+        if (_segmentImageContentIds.TryGetValue(part, out var segmentContentId))
+        {
+            _candidates.Add(new InlineCandidate(source, segmentContentId, AllowNameLookup: false));
         }
     }
 

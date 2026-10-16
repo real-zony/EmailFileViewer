@@ -12,4 +12,9 @@
     <ProjectReference Include="..\EmailFileViewer.Core\EmailFileViewer.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 协议测试直接用内存流驱动协议宿主 -->
+    <InternalsVisibleTo Include="EmailFileViewer.Sidecar.Tests" />
+  </ItemGroup>
+
 </Project>

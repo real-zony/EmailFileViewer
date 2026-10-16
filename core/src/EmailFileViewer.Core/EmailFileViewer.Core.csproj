@@ -10,6 +10,8 @@
     <PackageReference Include="MsgReader" />
     <PackageReference Include="OpenMcdf" />
     <PackageReference Include="RtfPipe" />
+    <!-- 不透明签名的邮件：只用 SignedCms.Decode 取出被签名的内容，不验证签名（版本固定在 Directory.Packages.props） -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="UTF.Unknown" />
   </ItemGroup>
 

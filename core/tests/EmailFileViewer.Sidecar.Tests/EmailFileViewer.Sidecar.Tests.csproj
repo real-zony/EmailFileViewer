@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EmailFileViewer.Sidecar\EmailFileViewer.Sidecar.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 和 Core 的测试共用样本定位和临时目录的辅助类 -->
+    <Compile Include="..\EmailFileViewer.Core.Tests\SampleFiles.cs" Link="Shared\SampleFiles.cs" />
+    <Compile Include="..\EmailFileViewer.Core.Tests\TempDirectory.cs" Link="Shared\TempDirectory.cs" />
+    <Compile Include="..\EmailFileViewer.Core.Tests\UnixOnlyFactAttribute.cs" Link="Shared\UnixOnlyFactAttribute.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

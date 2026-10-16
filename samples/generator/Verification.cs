@@ -99,6 +99,15 @@ internal static class Verification
         var plain = LoadEml(root, "body-plain-only.eml");
         Require(plain.HtmlBody is null && plain.TextBody is not null, "body-plain-only.eml 只有纯文本");
 
+        var segmented = LoadEml(root, "body-multipart-mixed-inline-images.eml");
+        var segmentedAlternative = segmented.Body as Multipart ?? throw new InvalidOperationException("样本自检失败：body-multipart-mixed-inline-images.eml 应该是 multipart");
+        Require(segmentedAlternative.ContentType.IsMimeType("multipart", "alternative") && segmentedAlternative.Count == 2, "body-multipart-mixed-inline-images.eml 顶层是 multipart/alternative（纯文本 + mixed）");
+        var segmentedMixed = segmentedAlternative[1] as Multipart ?? throw new InvalidOperationException("样本自检失败：HTML 备选应该是 multipart/mixed");
+        Require(
+            segmentedMixed.Select(part => part.ContentType.MimeType).SequenceEqual(["text/html", "image/jpeg", "text/html", "image/png", "text/html", "application/pdf"]),
+            "body-multipart-mixed-inline-images.eml 的 mixed 里依次是 html、jpeg、html、png、html、pdf");
+        Require(segmentedMixed.Skip(1).Take(1).Concat(segmentedMixed.Skip(3).Take(1)).All(part => part.ContentDisposition?.Disposition == ContentDisposition.Inline), "两张图片都是 inline");
+
         var cid = LoadEml(root, "cid-inline-image.eml");
         Require(cid.BodyParts.Count(part => part.ContentId is not null) == 2, "cid-inline-image.eml 有两个带 Content-ID 的图片");
         Require(cid.HtmlBody!.Contains("cid:logo@samples.efv.invalid", StringComparison.Ordinal), "cid-inline-image.eml 的 HTML 引用了 cid:logo");

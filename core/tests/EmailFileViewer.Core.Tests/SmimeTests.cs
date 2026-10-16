@@ -179,7 +179,8 @@ public class SmimeTests
         Assert.True(parsed.Document.IsSigned);
         Assert.False(parsed.Document.IsEncrypted);
         Assert.Equal("S/MIME opaque-signed MSG", parsed.Document.Subject);
-        Assert.Empty(parsed.Document.Attachments);
+        // 被签名的正文和附件在 OpaqueSignedTests 里验证；smime.p7m 本身不是附件
+        Assert.DoesNotContain(parsed.Document.Attachments, attachment => attachment.FileName == "smime.p7m");
     }
 
     [Fact]

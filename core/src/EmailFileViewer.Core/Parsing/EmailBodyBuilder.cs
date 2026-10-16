@@ -26,6 +26,7 @@ internal static class EmailBodyBuilder
     /// <param name="getPlainText">读取纯文本正文。</param>
     /// <param name="resolver">解析内嵌资源的对象，没有时为 <c>null</c>。</param>
     /// <param name="convertRtf">RTF 转 HTML 的函数；默认用 RtfPipe，测试里用来模拟转换失败。</param>
+    /// <param name="getPlainTextHtml">读取已经拼好的纯文本正文 HTML（多段纯文本，中间夹着内嵌图片）；有内容时优先于 <paramref name="getPlainText"/>，同样要经过清理，正文来源仍记为纯文本。</param>
     /// <returns>正文；三种来源都没有内容时正文为 <see cref="EmailBody.Empty"/>。</returns>
     /// <exception cref="EmailParseException">RTF 转换失败，而且没有纯文本可以替代，类别为 <see cref="EmailParseErrorKind.Corrupted"/>。</exception>
     internal static BuiltBody Build(
@@ -33,7 +34,8 @@ internal static class EmailBodyBuilder
         Func<string?> getRtf,
         Func<string?> getPlainText,
         InlineResourceResolver? resolver,
-        Func<string, string>? convertRtf = null)
+        Func<string, string>? convertRtf = null,
+        Func<string?>? getPlainTextHtml = null)
     {
         var html = getHtml();
         if (!string.IsNullOrWhiteSpace(html))
@@ -56,6 +58,13 @@ internal static class EmailBodyBuilder
             {
                 rtfFailure = ex;
             }
+        }
+
+        var plainTextHtml = getPlainTextHtml?.Invoke();
+        if (!string.IsNullOrWhiteSpace(plainTextHtml))
+        {
+            var sanitized = HtmlSanitizer.Sanitize(plainTextHtml, resolver);
+            return new BuiltBody(new EmailBody(BodyFormat.PlainText, sanitized.Html), sanitized.HasRemoteContent);
         }
 
         var plainText = getPlainText();

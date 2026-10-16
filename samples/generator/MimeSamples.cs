@@ -118,6 +118,55 @@ internal static class MimeSamples
                 ""),
         };
         output.Write("body-plain-only.eml", plain);
+
+        WriteSegmentedBodySample(output);
+    }
+
+    // Apple Mail 在正文里插入图片时的结构：multipart/alternative 的 HTML 备选是一个 multipart/mixed，
+    // 里面交替放着多个 text/html 和内嵌图片（Content-Disposition: inline，带 Content-ID 但 HTML 里没有引用），最后是真正的附件
+    private static void WriteSegmentedBodySample(SampleOutput output)
+    {
+        var message = NewMessage("body-multipart-mixed-inline-images", "Segmented body with inline images (Apple Mail style)", Personas.Dave, Personas.BaseDate.AddHours(2).AddMinutes(30));
+        message.To.Add(Personas.Alice);
+
+        var mixed = new Multipart("mixed")
+        {
+            SegmentHtml("<div>SEGMENT-ONE: text before the first picture.</div>"),
+            InlineImage("photo.jpg", "image/jpeg", Assets.Photo(), "apple-photo@samples.efv.invalid"),
+            SegmentHtml("<div>SEGMENT-TWO: text between the two pictures. 中文：两张图片之间的文字。</div>"),
+            InlineImage("logo.png", "image/png", Assets.Logo(), "apple-logo@samples.efv.invalid"),
+            SegmentHtml("<div>SEGMENT-THREE: text after the second picture.</div>"),
+            BinaryAttachment("itinerary.pdf", "application/pdf", OfficeFiles.CreatePdf("Itinerary attached to the segmented body")),
+        };
+
+        message.Body = new Multipart("alternative")
+        {
+            new TextPart("plain") { Text = "PLAIN-ALTERNATIVE: the plain-text alternative of the segmented body. The viewer shows the HTML parts instead.\n" },
+            mixed,
+        };
+        output.Write("body-multipart-mixed-inline-images.eml", message);
+    }
+
+    private static TextPart SegmentHtml(string content)
+    {
+        return new TextPart("html")
+        {
+            Text = "<html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"></head>"
+                + "<body style=\"overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;\">"
+                + content
+                + "</body></html>",
+        };
+    }
+
+    private static MimePart InlineImage(string fileName, string contentType, byte[] data, string contentId)
+    {
+        return new MimePart(ContentType.Parse(contentType))
+        {
+            Content = new MimeContent(new MemoryStream(data)),
+            ContentDisposition = new ContentDisposition(ContentDisposition.Inline) { FileName = fileName },
+            ContentTransferEncoding = ContentEncoding.Base64,
+            ContentId = contentId,
+        };
     }
 
     #endregion
@@ -415,7 +464,7 @@ internal static class MimeSamples
         output.Write("attachments-executables.eml", executables);
     }
 
-    private static MimePart TextAttachment(string fileName, string text)
+    internal static MimePart TextAttachment(string fileName, string text)
     {
         return new MimePart("text", "plain")
         {

@@ -36,7 +36,7 @@ dotnet run --project samples/generator -- samples
 
 | 文件 | 会变的原因 |
 |------|-----------|
-| `smime-signed.eml`、`smime-encrypted.eml` | 每次运行现做一张自签名证书（RSA 2048），私钥只在内存里，不写盘、不提交；证书、签名时间和会话密钥每次都不同。内容（主题、正文、签名和加密的结构）不变 |
+| `smime-signed.eml`、`smime-signed-opaque.eml`、`smime-encrypted.eml` | 每次运行现做一张自签名证书（RSA 2048），私钥只在内存里，不写盘、不提交；证书、签名时间和会话密钥每次都不同。内容（主题、正文、签名和加密的结构）不变 |
 | `body-rtf-only.msg`、`body-html-in-rtf.msg`、`nested-msg-two-levels.msg` | MsgKit 保存时写入当前时间和随机的 EntryId / InstanceKey。主题、正文、附件不变 |
 | `smime-msg-encrypted.msg`、`smime-msg-signed-opaque.msg`、`smime-msg-signed-clear.msg` | 同上，另外 smime.p7m 里的 CMS 数据用运行时现做的自签名证书生成（私钥不写盘），每次都不同 |
 | `attachment-msg-file.eml`、`format-msg-disguised-as-eml.eml`、`invalid/truncated.msg` | 它们由 `body-rtf-only.msg` 派生，跟着一起变 |
@@ -64,6 +64,7 @@ multipart 边界（`----=_efv_01` 之类）、Message-Id、Content-Id、日期�
 |------|------|-----------|----------------|
 | `body-html-and-plain.eml` | 生成 | `multipart/alternative`，HTML 版和纯文本版的文字不同（`HTML-VERSION` / `PLAIN-TEXT-VERSION`），可以直接看出显示的是哪一个 | email-viewing / 正文格式选择 / 同时有 HTML 和纯文本 |
 | `body-plain-only.eml` | 生成 | 只有纯文本：多段、连续两个空行、空格和制表符缩进、`>` 引用行、`<b>` 与 `&` 等需要转义的字符、中文 | email-viewing / 正文格式选择（纯文本保留换行） |
+| `body-multipart-mixed-inline-images.eml` | 生成 | **Apple Mail 式的分段正文**：`multipart/alternative` 里的 HTML 备选是一个 `multipart/mixed`，里面交替放着三段 `text/html`（标记 `SEGMENT-ONE`、`SEGMENT-TWO`、`SEGMENT-THREE`，第二段含中文）和两张 `Content-Disposition: inline` 的图片（`photo.jpg`、`logo.png`，带 Content-ID 但 HTML 没有引用），最后是真正的附件 `itinerary.pdf`；纯文本备选只有 `PLAIN-ALTERNATIVE`。预期：正文按顺序是三段文字，图片以 `data:` 图片插在它们之间，附件列表只有 `itinerary.pdf`，纯文本备选不显示 | email-viewing / 正文格式选择（分段正文按顺序拼接）；email-attachments / 列出附件（夹在正文里的内嵌图片不列出） |
 | `body-rtf-only.msg` | 生成 | **只有 RTF 正文**：没有 PR_BODY 纯文本流、没有 PR_HTML，RTF 不是 HTML 封装。含粗体、斜体、下划线、颜色、两个段落、项目符号、等宽字体行、超链接和 `\uN?` 转义的中文（`Chinese text: 中文段落。`，写成 `\u20013?\u25991?\u27573?\u33853?\u12290?`）；标记文字 `RTF-ONLY-BODY` 和 `END-OF-RTF-BODY` | email-viewing / 正文格式选择 / 只有 RTF 正文的 MSG；email-opening / 通过文件对话框打开（`.msg`） |
 | `body-html-in-rtf.msg` | 生成 | **HTML 封装在 RTF 中**：HTML 正文只存在于 PR_RTF_COMPRESSED 里（带 `\fromhtml1`），没有 PR_HTML 流、没有纯文本流。HTML 有标题、粗体斜体、链接、中文、列表、表格，标记文字 `HTML-IN-RTF-BODY` 和 `END-OF-HTML-IN-RTF-BODY`。封装用的是 MsgKit 的简化形式（整段 HTML 放进一个 `\htmltag` 组），不同于 Outlook 的逐标签封装；Outlook 生成的形式见下面几个上游样本 | email-viewing / 正文格式选择（HTML 正文优先）；MSG 里 RTF 封装的 HTML 要还原成 HTML 显示 |
 | `RtfSampleEmail.msg` | 上游 | 纯文本 + RTF 正文，没有 HTML（真实 Outlook 的 MSG 通常都带纯文本流，所以这个不是"只有 RTF"，用来测 RTF 优先于纯文本） | email-viewing / 正文格式选择（RTF 转换） |
@@ -108,10 +109,11 @@ multipart 边界（`----=_efv_01` 之类）、Message-Id、Content-Id、日期�
 | `html-malicious.eml` | 生成 | 恶意 HTML 探针。包含 `<script>`；`onerror`、`onload`（body 和 svg）、`onclick`、`onmouseover`、`onfocus` 事件属性；`javascript:` 链接（含大小写混写）；`<form>`；`<meta http-equiv="refresh">`；`<iframe>`（含 `srcdoc`）；`<object>`、`<embed>`；`<base>`；远程 `<link rel=stylesheet>`；脚本里尝试调用 `window.__TAURI_INTERNALS__`、`window.__TAURI__` 和 `window.parent.postMessage`。**所有探测只调用不存在的命令 `efv_probe_should_fail`**，目标地址都是 `efv-probe.invalid`，不做任何破坏性操作。页面里有三处可见标记：`MARKER-START`、`NO-SCRIPT-RAN`（脚本若执行会变成 `SCRIPT-RAN: ...`）、`MARKER-END`；另含一个应保留的普通 https 链接 | email-viewing / 正文在沙箱中渲染（正文包含脚本；正文尝试调用应用接口）；正文链接在系统浏览器中打开 |
 | `link-text-mismatch.eml` | 生成 | 四个链接：显示文字 `paypal.com` 实际指向 `https://example.com/not-paypal`；显示 URL 文字但主机不同；`title` 属性伪造成 paypal 地址；一个文字与地址一致的对照 | email-viewing / 正文链接在系统浏览器中打开 / 链接文字与实际地址不符（悬停应显示实际地址） |
 | `smime-signed.eml` | 生成 | `multipart/signed`，`protocol="application/pkcs7-signature"`，SHA-256，签名文件 `smime.p7s`。证书是运行时现做的自签名证书，私钥不提交；应用不验证签名 | email-viewing / 加密与签名邮件提示 / 签名邮件 |
+| `smime-signed-opaque.eml` | 生成 | **EML 版不透明签名**：邮件头明文，顶层只有一个 `application/pkcs7-mime; smime-type=signed-data; name=smime.p7m`，被签名的内容（`multipart/mixed`：HTML 与纯文本两个备选，标记 `OPAQUE-SIGNED-HTML` / `OPAQUE-SIGNED-PLAIN`，外加附件 `signed-report.pdf`）包在 CMS 里。证书是运行时现做的自签名证书，私钥不提交；应用只解码 CMS 取出内容，不验证签名 | email-viewing / 加密与签名邮件提示 / 签名邮件（不透明签名，正文和附件照常显示）；查看时不产生网络请求 |
 | `smime-signed-thunderbird.eml` | 上游 | Thunderbird 24 签名的真实邮件，`multipart/signed`（SHA-1），正文 + 一张 jpg 附件 + `smime.p7s` | 同上 |
 | `smime-encrypted.eml` | 生成 | `application/pkcs7-mime; smime-type=enveloped-data; name=smime.p7m`，邮件头（发件人、收件人、主题、日期）是明文，正文只在加密信封里，解密后以 `SECRET-BODY` 开头 | email-viewing / 加密与签名邮件提示 / 加密邮件 |
 | `smime-msg-encrypted.msg` | 生成 | **MSG 版加密邮件**：消息类 `IPM.Note.SMIME`，内容在名为 `smime.p7m` 的附件里（CMS enveloped-data，正文 `SECRET-BODY…`） | 同上（MSG） |
-| `smime-msg-signed-opaque.msg` | 生成 | **MSG 版不透明签名**：消息类 `IPM.Note.SMIME`，`smime.p7m` 是 CMS signed-data，正文（`OPAQUE-SIGNED-BODY…`）包在签名里面 | email-viewing / 加密与签名邮件提示 / 签名邮件（MSG）；应用不解开 CMS，所以没有正文 |
+| `smime-msg-signed-opaque.msg` | 生成 | **MSG 版不透明签名**：消息类 `IPM.Note.SMIME`，`smime.p7m` 是 CMS signed-data，被签名的内容（`multipart/mixed`：纯文本正文 `OPAQUE-SIGNED-BODY…` 加文本附件 `opaque-note.txt`）包在签名里面 | email-viewing / 加密与签名邮件提示 / 签名邮件（MSG）；应用解码 CMS 取出内容，正文和附件照常显示，不验证签名 |
 | `smime-msg-signed-clear.msg` | 生成 | **MSG 版明文签名**：消息类 `IPM.Note.SMIME.MultipartSigned`，`smime.p7m` 里是完整的 multipart/signed 邮件，正文 `CLEAR-SIGNED-BODY…` 可读 | 同上；应用取 smime.p7m 里邮件的正文 |
 
 三个 `smime-msg-*.msg` 是 MsgKit 先按普通邮件保存、再用 OpenMcdf 改写消息类得到的。**不要用 MsgReader 直接打开它们**：MsgReader 对这类消息会验证证书链，可能联网；Core 在交给 MsgReader 之前先在内存副本里把消息类改回 `IPM.Note`。
@@ -198,6 +200,8 @@ Core 对这几个文件的判断（`EmailParseException.Kind`）：`not-an-email
 - `TnefPart.ExtractAttachments()` 除了文件，还会把 TNEF 里的正文作为没有文件名的文本部分一并返回。Core 只取有文件名的成员，winmail.dat 本身不列出。
 - MimeKit 的 `MimeMessage.Attachments` 不包含没有 `Content-Disposition` 的 `message/rfc822` 部分。Core 自己遍历 MIME 结构，这类部分、`Content-Disposition: attachment` 的 rfc822、作为附件的 `.eml` / `.msg` 文件都列为嵌套邮件。
 - 签名邮件的签名文件 `smime.p7s`（`multipart/signed` 的第二个成员）和加密邮件的信封 `smime.p7m` 不是用户附件，Core 不列出。
+- 不透明签名（`application/pkcs7-mime; smime-type=signed-data`，EML 和 MSG 都有）：Core 用 `SignedCms.Decode` 取出被签名的 MIME 实体，当作邮件内容解析正文和附件。**只解码，不调用 `CheckSignature`，不读证书、不建证书链**，所以没有网络请求，也不知道签名是否有效（界面注明"未验证"）。
+- Apple Mail 这类客户端会在 `multipart/mixed` 里交替放多个正文部分和内嵌图片。Core 按顺序拼接这些非附件的文本部分（HTML 取 `<body>` 内的内容，纯文本先转成 HTML），夹在中间的 `image/*`（inline 或没有声明为附件）以 `data:` 图片插入对应位置，不列为附件；拼好的 HTML 照样经过清理。首尾没有被文本夹住的图片仍作为附件列出。
 - 邮件头里直接写 8 位字节（没有 RFC 2047）而且不是 UTF-8 时，MimeKit 会按 ISO-8859-1 解出乱码。Core 检测到这种情况就用正文声明的字符集（没有就根据邮件头的字节识别）设为 `ParserOptions.CharsetEncoding` 重新解析。
 - 文件开头有空行（或 UTF-8 BOM）时，MimeKit 会把整封邮件当成正文；Core 先跳过它们再交给 MimeKit。
 - MSG 的 S/MIME 邮件见上面的 `smime-msg-*.msg`。
@@ -219,7 +223,10 @@ Core 列出的附件（Id 是不透明字符串，这里只列文件名）：
 | `attachment-eml-file.eml` | `forwarded-as-file.eml`、`forwarded-as-rfc822.eml`，都是嵌套邮件 |
 | `attachment-msg-file.eml` | `forwarded-message.msg`，嵌套邮件 |
 | `tnef-winmail-docx.eml` | 只有 `meeting-minutes.docx` |
-| `smime-signed.eml`、`smime-encrypted.eml`、`smime-msg-*.msg` | 没有附件 |
+| `smime-signed.eml`、`smime-encrypted.eml`、`smime-msg-encrypted.msg`、`smime-msg-signed-clear.msg` | 没有附件 |
+| `smime-signed-opaque.eml` | 只有 `signed-report.pdf`（在签名数据里面，`smime.p7m` 本身不列出） |
+| `smime-msg-signed-opaque.msg` | 只有 `opaque-note.txt`（在签名数据里面，`smime.p7m` 本身不列出） |
+| `body-multipart-mixed-inline-images.eml` | 只有 `itinerary.pdf`（夹在三段正文之间的两张 inline 图片拼进正文，不列出） |
 | `smime-signed-thunderbird.eml` | 只有 `signed.jpg` |
 | `EmailWithAttachments.msg` | 只有 `peterpan.jpg`（`tinkerbell.jpg` 是被 HTML 按文件名引用的隐藏图片，内嵌，不列出） |
 | `HtmlSampleEmailWithAttachment.msg` | `SampleAttachment.pdf` |
@@ -233,7 +240,6 @@ Core 列出的附件（Id 是不透明字符串，这里只列文件名）：
 
 1. **没有 Outlook 真实导出的、带完整 MAPI 属性的 winmail.dat。** `tnef-winmail-docx.eml` 里的 TNEF 是生成器按规范写的最小实现，MimeKit 能解析，但没有用真实 Outlook 验证。MimeKit 测试集里的 `.tnef` 文件是裸数据流且含真实姓名，MSGReader 里没有 winmail.dat，所以没有采用（详见 `ATTRIBUTION.md`）。
 2. **`body-rtf-only.msg`、`body-html-in-rtf.msg` 和 `nested-msg-two-levels.msg` 没有用真实 Outlook 打开验证。** 它们由 MsgKit 生成，嵌套邮件还经过手工改写复合文档，已通过 MsgReader 读回验证，并对照了 Outlook 生成的上游样本的属性布局。`body-html-in-rtf.msg` 的 RTF 封装比 Outlook 的简单，Outlook 形式的 HTML 封装请用上游的 `HtmlSampleEmailWithAttachment.msg` 等。
-3. **EML 没有不透明签名的 S/MIME**（`application/pkcs7-mime; smime-type=signed-data`，正文包在 CMS 里）。规格只要求处理 `multipart/signed` 的签名邮件和加密邮件，应用也不创建 S/MIME 上下文，所以没有构造；MSG 版的不透明签名有（`smime-msg-signed-opaque.msg`），应用把它标为"已签名"，但不解开 CMS，所以没有正文。
-   另外，三个 `smime-msg-*.msg` 没有用真实 Outlook 打开验证，它们按 MS-OXMSG 和 MsgReader 对这类消息的读取逻辑构造（消息类 + smime.p7m 附件）。
+3. **三个 `smime-msg-*.msg` 没有用真实 Outlook 打开验证**，它们按 MS-OXMSG 和 MsgReader 对这类消息的读取逻辑构造（消息类 + smime.p7m 附件）。`smime-signed-opaque.eml` 和 `smime-msg-signed-opaque.msg` 的签名数据由 MimeKit（BouncyCastle）生成，用 `System.Security.Cryptography.Pkcs` 读回验证过；没有用 Outlook、Thunderbird、Apple Mail 等客户端生成的不透明签名邮件验证。
 4. **`Tool.app` 只是文件名模拟。** `.app` 在 macOS 上是目录包，邮件里的附件只能是一个文件。
 5. **远程资源的地址要合并到 `main` 之后才能真正加载。** 在那之前"用户选择加载"后图片会是裂图，属于预期。

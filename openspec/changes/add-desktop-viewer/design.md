@@ -76,7 +76,7 @@
 - **实验结论（任务 1.4）：采用 NativeAOT。** 依据：
   - smoke 走到的代码路径上，build 和 publish 都是 0 条 IL/AOT/裁剪警告。
   - CI 在 win-x64、linux-x64、osx-arm64、osx-x64 四个平台上都完成了测试、AOT 发布和 smoke；Linux 产物经 `ldd` 和 `LD_DEBUG` 确认不依赖 libicu。
-  - sidecar 体积：macOS arm64 未压缩约 6.2 MB；四个平台打包后（zip）约 2.9–4.4 MB。
+  - sidecar 体积：实验时 macOS arm64 未压缩约 6.2 MB；四个平台打包后（zip）约 2.9–4.4 MB。第 3、4 组完成后（加入字符集识别、CMS 解码、stdio 协议）约 10 MB。
 - **已知的 AOT 警告**（对 MimeKit、MsgReader、OpenMcdf、RtfPipe 做全量分析得到，细节见 `core/docs/aot-spike.md`）：
   - RtfPipe `ControlTag.Negate`：IL2075 和 IL3050 各 1 条，任务 3.3 调用 RtfPipe 时会出现。实测 `\b0`、`\i0` 等输出正确，接受。
   - MimeKit 默认 S/MIME 上下文：IL2026。任务 3.7 只按 MIME 类型识别签名和加密，**不要创建 S/MIME 上下文**，以避开这条路径。

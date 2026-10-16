@@ -14,6 +14,11 @@ internal static class SpecialSamples
 {
     public const string TnefDocxFileName = "meeting-minutes.docx";
 
+    /// <summary>
+    /// 不透明签名的 EML 里被签名的 PDF 附件的文件名。
+    /// </summary>
+    public const string OpaqueSignedAttachmentName = "signed-report.pdf";
+
     private const string DocxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
     public static byte[] TnefDocx() => OfficeFiles.CreateDocx(
@@ -70,6 +75,12 @@ internal static class SpecialSamples
         signedMessage.Body = MultipartSigned.Create(context, signer, signedContent);
         output.Write("smime-signed.eml", signedMessage);
 
+        // 不透明签名：邮件顶层只有一个 application/pkcs7-mime（signed-data），正文和附件都包在签名数据里
+        var opaqueMessage = MimeSamples.NewMessage("smime-signed-opaque", "S/MIME opaque-signed message", Personas.Alice, Personas.BaseDate.AddHours(12).AddMinutes(30));
+        opaqueMessage.To.Add(Personas.Bob);
+        opaqueMessage.Body = ApplicationPkcs7Mime.Sign(context, signer, CreateOpaqueSignedContent());
+        output.Write("smime-signed-opaque.eml", opaqueMessage);
+
         var encryptedMessage = MimeSamples.NewMessage("smime-encrypted", "S/MIME encrypted message", Personas.Alice, Personas.BaseDate.AddHours(13));
         encryptedMessage.To.Add(Personas.Bob);
         var secretContent = new TextPart("plain")
@@ -85,12 +96,60 @@ internal static class SpecialSamples
         VerifySmime(output.Root, certificate, context);
     }
 
+    /// <summary>
+    /// 不透明签名的 EML 里被签名的内容：HTML 加纯文本两个备选，外加一个 PDF 附件。
+    /// </summary>
+    /// <remarks>
+    /// 内部的 multipart 边界写死：签名覆盖的是这些字节，生成之后不能再改。
+    /// </remarks>
+    internal static Multipart CreateOpaqueSignedContent()
+    {
+        var alternative = new Multipart("alternative")
+        {
+            new TextPart("plain") { Text = "OPAQUE-SIGNED-PLAIN: the plain-text alternative inside the signature.\n" },
+            new TextPart("html") { Text = "<html><body><h1>OPAQUE-SIGNED-HTML</h1><p>The body and the attachment of this message are wrapped inside the <b>signature</b>.</p></body></html>" },
+        };
+        alternative.Boundary = "----=_efv_opaque_alt";
+
+        var mixed = new Multipart("mixed")
+        {
+            alternative,
+            new MimePart("application", "pdf")
+            {
+                Content = new MimeContent(new MemoryStream(OfficeFiles.CreatePdf("Attachment inside an opaque signature"))),
+                ContentDisposition = new ContentDisposition(ContentDisposition.Attachment),
+                ContentTransferEncoding = ContentEncoding.Base64,
+                FileName = OpaqueSignedAttachmentName,
+            },
+        };
+        mixed.Boundary = "----=_efv_opaque_mixed";
+        return mixed;
+    }
+
     private static void VerifySmime(string root, X509Certificate2 certificate, TemporarySecureMimeContext context)
     {
         var signed = Verification.LoadEml(root, "smime-signed.eml");
         var signedBody = signed.Body as MultipartSigned ?? throw new InvalidOperationException("样本自检失败：smime-signed.eml 应该是 multipart/signed");
         var signatures = signedBody.Verify(context);
         Verification.Require(signatures.Count == 1 && signatures.All(signature => signature.Verify(verifySignatureOnly: true)), "smime-signed.eml 的签名结构正确");
+
+        var opaque = Verification.LoadEml(root, "smime-signed-opaque.eml");
+        var opaqueBody = opaque.Body as ApplicationPkcs7Mime ?? throw new InvalidOperationException("样本自检失败：smime-signed-opaque.eml 应该是 application/pkcs7-mime");
+        Verification.Require(opaqueBody.SecureMimeType == SecureMimeType.SignedData, "smime-signed-opaque.eml 是 signed-data");
+        using (var cms = new MemoryStream())
+        {
+            opaqueBody.Content!.DecodeTo(cms);
+            var signedCms = new System.Security.Cryptography.Pkcs.SignedCms();
+            signedCms.Decode(cms.ToArray());
+            signedCms.CheckSignature(verifySignatureOnly: true);
+            using var inner = new MemoryStream(signedCms.ContentInfo.Content);
+            var innerText = Encoding.UTF8.GetString(inner.ToArray());
+            Verification.Require(
+                innerText.Contains("OPAQUE-SIGNED-PLAIN", StringComparison.Ordinal)
+                && innerText.Contains("OPAQUE-SIGNED-HTML", StringComparison.Ordinal)
+                && innerText.Contains(OpaqueSignedAttachmentName, StringComparison.Ordinal),
+                "smime-signed-opaque.eml 的签名数据里有正文和附件");
+        }
 
         var encrypted = Verification.LoadEml(root, "smime-encrypted.eml");
         var envelope = encrypted.Body as ApplicationPkcs7Mime ?? throw new InvalidOperationException("样本自检失败：smime-encrypted.eml 应该是 application/pkcs7-mime");

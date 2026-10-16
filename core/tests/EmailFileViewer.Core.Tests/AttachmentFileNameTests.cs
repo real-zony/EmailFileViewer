@@ -302,10 +302,64 @@ public class AttachmentFileNameTests
     }
 
     [Theory]
+    [InlineData("tool.jar")]
+    [InlineData("script.vbe")]
+    [InlineData("script.ws")]
+    [InlineData("script.wsh")]
+    [InlineData("module.psm1")]
+    [InlineData("manifest.psd1")]
+    [InlineData("format.ps1xml")]
+    [InlineData("settings.reg")]
+    [InlineData("console.msc")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开可执行附件（其他脚本和配置）")]
+    public void IsExecutable_OtherScriptExtensions(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
+    [InlineData("folder.scf")]
+    [InlineData("site.url")]
+    [InlineData("program.pif")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开可执行附件（快捷方式）")]
+    public void IsExecutable_ShortcutExtensions(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
+    [InlineData("app.msix")]
+    [InlineData("app.msixbundle")]
+    [InlineData("app.appx")]
+    [InlineData("app.appxbundle")]
+    [InlineData("app.appinstaller")]
+    [InlineData("app.application")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开可执行附件（安装包）")]
+    public void IsExecutable_PackageExtensions(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
+    [InlineData("addin.xll")]
+    [InlineData("disc.iso")]
+    [InlineData("disk.img")]
+    [InlineData("disk.vhd")]
+    [InlineData("disk.vhdx")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开可执行附件（Excel 加载项和可挂载的磁盘映像）")]
+    public void IsExecutable_AddInAndDiskImageExtensions(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
     [InlineData("SETUP.EXE")]
     [InlineData("Setup.Exe")]
     [InlineData("INSTALL.SH")]
     [InlineData("tool.APP")]
+    [InlineData("TOOL.JAR")]
+    [InlineData("Disc.Iso")]
+    [InlineData("App.MsixBundle")]
     [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 扩展名不区分大小写")]
     public void IsExecutable_IsCaseInsensitive(string fileName)
     {
@@ -317,6 +371,8 @@ public class AttachmentFileNameTests
     [InlineData("photo.jpg.scr")]
     [InlineData("archive.tar.sh")]
     [InlineData("report.docx.js")]
+    [InlineData("holiday.jpg.url")]
+    [InlineData("invoice.pdf.iso")]
     [InlineData("evil.exe.")]
     [InlineData("evil.exe ")]
     [InlineData("..\\..\\evil.exe")]
@@ -342,6 +398,12 @@ public class AttachmentFileNameTests
     [InlineData("noextension")]
     [InlineData("bash.shx")]
     [InlineData("x.jsx")]
+    [InlineData("tool.jar.txt")]
+    [InlineData("disc.iso.pdf")]
+    [InlineData("settings.regx")]
+    [InlineData("notes.urls")]
+    [InlineData("app.msixx")]
+    [InlineData("iso")]
     [InlineData("")]
     [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开图片附件和其他普通文件")]
     public void IsExecutable_OrdinaryFiles_AreNot(string fileName)

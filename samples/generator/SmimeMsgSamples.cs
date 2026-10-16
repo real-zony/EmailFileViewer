@@ -25,6 +25,11 @@ internal static class SmimeMsgSamples
 
     public const string ClearSignedFileName = "smime-msg-signed-clear.msg";
 
+    /// <summary>
+    /// 不透明签名的 MSG 里被签名的文本附件的文件名。
+    /// </summary>
+    public const string OpaqueNoteFileName = "opaque-note.txt";
+
     private const string MessageClassStream = "__substg1.0_001A001F";
 
     public static void WriteAll(SampleOutput output)
@@ -40,7 +45,13 @@ internal static class SmimeMsgSamples
             EncryptedFileName,
             CreateCarrierMsg("IPM.Note.SMIME", "S/MIME encrypted MSG", sentOn, ContentBytes(ApplicationPkcs7Mime.Encrypt(context, recipients, secret))));
 
-        var opaqueContent = new TextPart("plain") { Text = "OPAQUE-SIGNED-BODY: the content is wrapped inside the signature.\n" };
+        // 被签名的内容：纯文本正文加一个文本附件，附件和正文一起包在签名里
+        var opaqueContent = new Multipart("mixed")
+        {
+            new TextPart("plain") { Text = "OPAQUE-SIGNED-BODY: the content is wrapped inside the signature.\n" },
+            MimeSamples.TextAttachment(OpaqueNoteFileName, "This attachment is wrapped inside the opaque signature.\n"),
+        };
+        opaqueContent.Boundary = "----=_efv_opaque_msg";
         output.Write(
             OpaqueSignedFileName,
             CreateCarrierMsg("IPM.Note.SMIME", "S/MIME opaque-signed MSG", sentOn.AddMinutes(1), ContentBytes(ApplicationPkcs7Mime.Sign(context, signer, opaqueContent))));
@@ -67,7 +78,8 @@ internal static class SmimeMsgSamples
         {
             var signedCms = new SignedCms();
             signedCms.Decode(cms);
-            Verification.Require(Encoding.UTF8.GetString(signedCms.ContentInfo.Content).Contains("OPAQUE-SIGNED-BODY", StringComparison.Ordinal), "不透明签名的 smime.p7m 里有正文");
+            var content = Encoding.UTF8.GetString(signedCms.ContentInfo.Content);
+            Verification.Require(content.Contains("OPAQUE-SIGNED-BODY", StringComparison.Ordinal) && content.Contains(OpaqueNoteFileName, StringComparison.Ordinal), "不透明签名的 smime.p7m 里有正文和附件");
         });
         Check(root, ClearSignedFileName, "IPM.Note.SMIME.MultipartSigned", "S/MIME clear-signed MSG", content =>
         {
