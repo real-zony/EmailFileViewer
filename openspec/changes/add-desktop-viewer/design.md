@@ -244,6 +244,20 @@
 - 拖放遮罩：前端通过 `getCurrentWebview().onDragDropEvent` 的 enter、over、leave 显示遮罩和文件数量。真正的打开由 Rust 在窗口的拖放事件中处理，前端收到 drop 时只需隐藏遮罩。
 - 外部链接：由 5.7 的新窗口拦截处理，前端不需要命令。
 
+**补充：原生菜单与窗口标题**（第一轮联调后加入，对应任务 7.10）
+
+- **为什么要加**：焦点进入正文 iframe 后，键盘事件不会冒泡到应用页面，网页里注册的 ⌘O/⌘W 会失效。
+- **macOS 原生菜单**：
+  - 应用菜单：关于、设置（⌘,）、隐藏、退出。
+  - 文件：打开（⌘O）、关闭标签页（⌘W）。
+  - 编辑：标准的复制、全选等项，没有它就无法在 WebView 里用 ⌘C 复制邮件内容。
+  - 窗口：最小化、缩放。
+- **菜单项的处理方式**：
+  - "打开"由 Rust 直接执行 `open_with_dialog` 的逻辑，不经过前端。
+  - "关闭标签页"和"设置"分别发出事件 `efv://close-active-tab`、`efv://open-settings`，由前端处理。
+- **Windows 和 Linux**：不显示菜单栏，与草稿保持一致；快捷键沿用网页内的处理。限制是焦点在正文里时 Ctrl+O/Ctrl+W 不生效，点一下正文以外的区域即可恢复。
+- **窗口标题**：前端调用 `setTitle`，有邮件时显示 "<主题，没有主题时用文件名> — EmailFileViewer"，空状态时显示 "EmailFileViewer"。需要 `core:window:allow-set-title` 权限。
+
 ## Risks / Trade-offs
 
 - [MsgReader 或 MimeKit 不兼容 AOT] → 按 D3 退回自包含的 JIT 发布，并补上 macOS entitlements；把这个实验排在第一个任务。
