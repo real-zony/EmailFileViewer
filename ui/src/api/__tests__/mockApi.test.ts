@@ -133,6 +133,30 @@ describe('模拟实现按 D11 的约定工作', () => {
     expect(api.calls.filter((c) => c.command === 'save_attachment')).toHaveLength(2)
   })
 
+  it('原生菜单的两个事件：监听之后才会收到，各自独立，取消监听后不再送达', async () => {
+    const api = createMockApi()
+    const closeTab = vi.fn()
+    const openSettings = vi.fn()
+    api.emitCloseActiveTab() // 还没有人监听：和 Tauri 一样丢失
+    const unCloseTab = await api.onCloseActiveTab(closeTab)
+    const unOpenSettings = await api.onOpenSettings(openSettings)
+    expect(api.listenerCount()).toBe(2)
+    expect(api.timeline).toEqual(['listen efv://close-active-tab', 'listen efv://open-settings'])
+    api.emitCloseActiveTab()
+    expect(closeTab).toHaveBeenCalledTimes(1)
+    expect(openSettings).not.toHaveBeenCalled()
+    api.emitOpenSettings()
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    unCloseTab()
+    unOpenSettings()
+    api.emitCloseActiveTab()
+    api.emitOpenSettings()
+    expect(closeTab).toHaveBeenCalledTimes(1)
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    expect(api.listenerCount()).toBe(0)
+    expect(api.calls).toEqual([]) // 菜单事件不是命令
+  })
+
   it('取消监听后事件不再送达，listenerCount 归零', async () => {
     const api = createMockApi()
     const handler = vi.fn()

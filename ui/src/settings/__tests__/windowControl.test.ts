@@ -47,7 +47,7 @@ describe('syncWindow', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const backgrounds: string[] = []
     await syncWindow(
-      { setTheme: () => Promise.reject(new Error('denied')), setBackgroundColor: (c) => (backgrounds.push(c), Promise.resolve()) },
+      { setTheme: () => Promise.reject(new Error('denied')), setBackgroundColor: (c) => (backgrounds.push(c), Promise.resolve()), setTitle: () => Promise.resolve() },
       'light',
       'indigo',
       false,

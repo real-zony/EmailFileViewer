@@ -85,6 +85,8 @@ cargo tauri build --bundles app
 
 `cargo tauri build` also runs `scripts/build-sidecar.mjs` first. Output goes to `src-tauri/target/release/bundle/`.
 
+On macOS, building the `.dmg` locally drives Finder through AppleScript. If your terminal has no Automation permission for Finder the build hangs; set `CI=true` to skip the window layout step. Release builds are made by CI, see [docs/release.md](docs/release.md).
+
 ## Working on individual parts
 
 **Parsing core**

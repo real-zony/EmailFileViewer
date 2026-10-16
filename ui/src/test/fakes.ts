@@ -36,6 +36,7 @@ export function installSystemAppearance(initialDark: boolean) {
 export function createFakeWindowControl() {
   const backgrounds: string[] = []
   const themes: ('light' | 'dark' | null)[] = []
+  const titles: string[] = []
   const control: WindowControl = {
     setBackgroundColor: (color) => {
       backgrounds.push(color)
@@ -45,6 +46,10 @@ export function createFakeWindowControl() {
       themes.push(theme)
       return Promise.resolve()
     },
+    setTitle: (title) => {
+      titles.push(title)
+      return Promise.resolve()
+    },
   }
-  return { control, backgrounds, themes }
+  return { control, backgrounds, themes, titles }
 }

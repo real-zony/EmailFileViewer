@@ -27,6 +27,7 @@ pub fn paths_from_args(args: &[String], cwd: &Path) -> Vec<PathBuf> {
 }
 
 /// macOS 的 `RunEvent::Opened`：只认 `file://`，其他 scheme 忽略。
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn paths_from_urls(urls: &[Url]) -> Vec<PathBuf> {
     urls.iter()
         .filter(|url| url.scheme() == "file")

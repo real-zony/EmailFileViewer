@@ -68,6 +68,10 @@ export interface MockApi extends ViewerApi {
   override<K extends CommandName>(command: K, impl: CommandImpl[K]): void
   /** 模拟窗口上的拖放事件（Rust 在 drop 时自己打开文件，这里的 drop 只是通知前端） */
   emitDrag(event: DragEvent): void
+  /** 模拟原生菜单的“关闭标签页”（⌘W），Rust 向前端发 efv://close-active-tab */
+  emitCloseActiveTab(): void
+  /** 模拟原生菜单的“设置…”（⌘,），Rust 向前端发 efv://open-settings */
+  emitOpenSettings(): void
   /** 事件监听数量，用来检查卸载后没有泄漏 */
   listenerCount(): number
 }
@@ -77,12 +81,21 @@ type Handlers = {
   failed: Set<(e: DocumentOpenFailedEvent) => void>
   finished: Set<(e: OpenBatchFinishedEvent) => void>
   drag: Set<(e: DragEvent) => void>
+  closeActiveTab: Set<() => void>
+  openSettings: Set<() => void>
 }
 
 export function createMockApi(): MockApi {
   const calls: MockCall[] = []
   const timeline: string[] = []
-  const handlers: Handlers = { opened: new Set(), failed: new Set(), finished: new Set(), drag: new Set() }
+  const handlers: Handlers = {
+    opened: new Set(),
+    failed: new Set(),
+    finished: new Set(),
+    drag: new Set(),
+    closeActiveTab: new Set(),
+    openSettings: new Set(),
+  }
   const registry = new Map<DocumentHandle, MockFile>()
   const dialogChoices: (readonly MockFile[])[] = []
   let dialogProvider: (() => readonly MockFile[] | undefined) | undefined
@@ -227,6 +240,8 @@ export function createMockApi(): MockApi {
     onDocumentOpenFailed: (handler) => listen(handlers.failed, EVENTS.documentOpenFailed, handler),
     onOpenBatchFinished: (handler) => listen(handlers.finished, EVENTS.openBatchFinished, handler),
     onDragDrop: (handler) => listen(handlers.drag, 'drag-drop', handler),
+    onCloseActiveTab: (handler) => listen(handlers.closeActiveTab, EVENTS.closeActiveTab, handler),
+    onOpenSettings: (handler) => listen(handlers.openSettings, EVENTS.openSettings, handler),
 
     queueDialogChoice: (files) => {
       dialogChoices.push(files)
@@ -251,7 +266,14 @@ export function createMockApi(): MockApi {
     emitDrag: (event) => {
       for (const h of [...handlers.drag]) h(event)
     },
-    listenerCount: () => handlers.opened.size + handlers.failed.size + handlers.finished.size + handlers.drag.size,
+    emitCloseActiveTab: () => {
+      for (const h of [...handlers.closeActiveTab]) h()
+    },
+    emitOpenSettings: () => {
+      for (const h of [...handlers.openSettings]) h()
+    },
+    listenerCount: () =>
+      handlers.opened.size + handlers.failed.size + handlers.finished.size + handlers.drag.size + handlers.closeActiveTab.size + handlers.openSettings.size,
   }
   return api
 }

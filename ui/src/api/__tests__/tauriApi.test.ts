@@ -124,6 +124,20 @@ describe('事件（listen）', () => {
     expect(finished).toHaveBeenCalledExactlyOnceWith(finishedEvent)
   })
 
+  it('原生菜单的两个事件（D11 补充）：事件名正确，处理函数不带参数', async () => {
+    const api = createTauriApi()
+    const closeTab = vi.fn()
+    const openSettings = vi.fn()
+    await api.onCloseActiveTab(closeTab)
+    await api.onOpenSettings(openSettings)
+    await emit('efv://close-active-tab')
+    expect(closeTab).toHaveBeenCalledExactlyOnceWith()
+    expect(openSettings).not.toHaveBeenCalled()
+    await emit('efv://open-settings')
+    expect(openSettings).toHaveBeenCalledExactlyOnceWith()
+    expect(closeTab).toHaveBeenCalledTimes(1)
+  })
+
   it('取消监听后不再收到事件', async () => {
     const api = createTauriApi()
     const handler = vi.fn()

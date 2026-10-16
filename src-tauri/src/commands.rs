@@ -81,7 +81,16 @@ pub async fn open_with_dialog(
     coordinator: State<'_, OpenCoordinator>,
 ) -> CommandResult<()> {
     log::debug!("command open_with_dialog");
-    if let Some(paths) = dialogs::pick_files(&app, &window).await? {
+    open_via_dialog(&app, &window, &coordinator).await
+}
+
+/// `open_with_dialog` 的实际逻辑，原生菜单的“打开…”（⌘O）也走这里。
+pub(crate) async fn open_via_dialog(
+    app: &AppHandle<Wry>,
+    window: &WebviewWindow<Wry>,
+    coordinator: &OpenCoordinator,
+) -> CommandResult<()> {
+    if let Some(paths) = dialogs::pick_files(app, window).await? {
         coordinator.submit(paths);
     }
     Ok(())

@@ -23,5 +23,6 @@ export function createWindowControl(): WindowControl | null {
   return {
     setBackgroundColor: (color) => win.setBackgroundColor(color),
     setTheme: (theme) => win.setTheme(theme),
+    setTitle: (title) => win.setTitle(title),
   }
 }

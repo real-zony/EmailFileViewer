@@ -16,6 +16,10 @@ export interface DevHooks {
   queueDialog(...names: string[]): void
   /** 模拟窗口上的拖放事件 */
   drag(event: DragEvent): void
+  /** 模拟原生菜单的“关闭标签页”（⌘W） */
+  closeActiveTab(): void
+  /** 模拟原生菜单的“设置…”（⌘,） */
+  openSettings(): void
   /** 打开一封任意内容的邮件（用来做安全探测，比如正文里带脚本的 HTML） */
   deliver(fileName: string, document: EmailDocument): Promise<number>
 }
@@ -43,6 +47,8 @@ export function createDevApi(): MockApi {
     open: (...names) => api.deliverBatch(pick(names)),
     queueDialog: (...names) => api.queueDialogChoice(pick(names)),
     drag: (event) => api.emitDrag(event),
+    closeActiveTab: () => api.emitCloseActiveTab(),
+    openSettings: () => api.emitOpenSettings(),
     deliver: (fileName, document) => api.deliverBatch([{ fileName, document }]),
   }
 

@@ -11,6 +11,7 @@ import { createMemoryStore } from '../settings/store.ts'
 import type { Language } from '../settings/language.ts'
 import type { AppSettings } from '../settings/types.ts'
 import type { Mode } from '../theme/palettes.ts'
+import type { WindowControl } from '../settings/windowControl.ts'
 import type { Platform } from '../viewer/platform.ts'
 import { installSystemAppearance } from './fakes.ts'
 
@@ -23,6 +24,8 @@ export interface StartOptions {
   prepare?: (api: MockApi) => void | Promise<void>
   /** 不用模拟实现，换成别的 ViewerApi（例如经过 mockIPC 的真实实现） */
   api?: ViewerApi
+  /** 原生窗口控制（窗口标题、底色）；不传时和浏览器里一样没有 */
+  windowControl?: WindowControl
 }
 
 export async function startApp(options: StartOptions = {}) {
@@ -31,7 +34,15 @@ export async function startApp(options: StartOptions = {}) {
   const mock = createMockApi()
   await options.prepare?.(mock)
   const settings: AppSettings = { language: options.language ?? 'en', mode: options.mode ?? 'light', palette: 'verdigris' }
-  const app = <App initialSettings={settings} store={createMemoryStore()} api={options.api ?? mock} platform={options.platform ?? 'other'} />
+  const app = (
+    <App
+      initialSettings={settings}
+      store={createMemoryStore()}
+      api={options.api ?? mock}
+      platform={options.platform ?? 'other'}
+      windowControl={options.windowControl ?? null}
+    />
+  )
   const view = render(options.strict ? <StrictMode>{app}</StrictMode> : app)
   // app_ready 在全部事件监听注册完成之后才会被调用
   if (!options.api) await waitFor(() => expect(mock.ready).toBe(true))

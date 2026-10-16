@@ -167,7 +167,7 @@ describe('7.3 经真实实现和 Tauri IPC 模拟：命令名、参数和事件�
     const { user, invoked } = await startWithIpc()
     const names = invoked.map((c) => c.cmd)
     const ready = names.indexOf('app_ready')
-    expect(names.slice(0, ready).filter((n) => n === 'plugin:event|listen')).toHaveLength(7) // 3 个业务事件 + 4 个拖放事件
+    expect(names.slice(0, ready).filter((n) => n === 'plugin:event|listen')).toHaveLength(9) // 3 个业务事件 + 4 个拖放事件 + 2 个菜单事件
     expect(names.filter((n) => n === 'app_ready')).toHaveLength(1)
     expect(names.slice(0, ready).every((n) => n === 'plugin:event|listen')).toBe(true)
     await user.click(screen.getByRole('button', { name: 'Open file…' }))

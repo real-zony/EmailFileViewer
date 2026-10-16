@@ -58,7 +58,7 @@
 - [x] 7.7 实现附件列表、保存、全部保存、打开、打开嵌套邮件，以及可执行附件被拒绝时的提示；验证组件测试覆盖每个操作，并用样本手动确认 `email-attachments` 的各个场景
 - [x] 7.8 实现错误提示（不支持的格式、已损坏、无法读取，并显示文件名），多个文件中部分失败时互不影响；验证测试覆盖 `email-opening` 中"无法识别或损坏的文件"和"一次打开多个文件"的场景
 - [x] 7.9 实现单窗口标签页（只有一个文件时隐藏标签栏；打开失败的文件也占一个标签页，并另加汇总通知；嵌套邮件在当前标签页内逐层进入，用面包屑返回）；验证一次打开三个文件时三封邮件都能独立查看和关闭，其中一个失败时显示为错误标签页
-- [ ] 7.10 按 design.md D11 的补充实现原生菜单与窗口标题：macOS 菜单（打开 ⌘O 由 Rust 处理；关闭标签页 ⌘W、设置 ⌘, 通过事件交给前端；包含标准的编辑菜单），前端用 `setTitle` 让窗口标题跟随当前邮件；验证 Rust 测试覆盖菜单事件分发，前端测试覆盖两个事件和标题更新，并在 macOS 上确认菜单存在、焦点在正文里时 ⌘W 仍能关闭标签页
+- [x] 7.10 按 design.md D11 的补充实现原生菜单与窗口标题：macOS 菜单（打开 ⌘O 由 Rust 处理；关闭标签页 ⌘W、设置 ⌘, 通过事件交给前端；包含标准的编辑菜单），前端用 `setTitle` 让窗口标题跟随当前邮件；验证 Rust 测试覆盖菜单事件分发，前端测试覆盖两个事件和标题更新，并在 macOS 上确认菜单存在、焦点在正文里时 ⌘W 仍能关闭标签页（本机无法合成按键：菜单已在 macOS 上确认存在，"焦点在正文里时 ⌘W"并入 10.1 人工验收）
 
 ## 8. 界面语言与外观（app-localization、app-appearance）
 
@@ -70,7 +70,7 @@
 
 ## 9. 打包、签名与发布（app-distribution，design D10）
 
-- [ ] 9.1 配置安装包：Windows 用 NSIS 生成 `.exe` 并内置 WebView2 引导安装，macOS 生成 arm64 和 x64 两个 `.dmg`（或用 `lipo` 合并 sidecar 后生成通用版），Linux 生成 AppImage 和声明了依赖的 `.deb`；验证在 CI 中三个平台都产出这些文件
+- [x] 9.1 配置安装包：Windows 用 NSIS 生成 `.exe` 并内置 WebView2 引导安装，macOS 生成 arm64 和 x64 两个 `.dmg`（或用 `lipo` 合并 sidecar 后生成通用版），Linux 生成 AppImage 和声明了依赖的 `.deb`；验证在 CI 中三个平台都产出这些文件
 - [ ] 9.2 新增 `.github/workflows/release.yml`：推送 `v*` 标签时在四个平台上构建，创建草稿 Release 并附上 SHA-256 校验文件；在 `docs/release.md` 中写明发版步骤和需要配置的 Secrets；验证推送测试标签 `v0.0.1-test` 后生成的草稿 Release 包含全部安装包和校验文件
 - [ ] 9.3 **（需要用户操作）** 准备 Apple Developer Program 账号和 Windows 签名渠道（Certum 或 SignPath），把凭据配置进 GitHub Secrets；验证 `docs/release.md` 中列出的 Secrets 都已配置
 - [ ] 9.4 在 release 流程中加入 macOS 签名和公证，并对应用和 sidecar 执行 `codesign -dv` 和 `spctl -a -vv` 检查；验证在一台干净的 Mac 上从浏览器下载 dmg 后首次打开不出现拦截提示

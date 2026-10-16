@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { I18nextProvider, useTranslation } from 'react-i18next'
 import { createMockApi } from './api/mockApi.ts'
-import type { ViewerApi } from './api/types.ts'
+import type { Unlisten, ViewerApi } from './api/types.ts'
 import {
   AppShell,
   Breadcrumbs,
@@ -31,6 +31,7 @@ import { displayName } from './viewer/mailModel.ts'
 import { MailView } from './viewer/MailView.tsx'
 import { detectPlatform, type Platform } from './viewer/platform.ts'
 import { activeTab } from './viewer/store.ts'
+import { windowTitle } from './viewer/title.ts'
 import { Toasts } from './viewer/Toasts.tsx'
 
 export interface AppProps {
@@ -87,14 +88,52 @@ function AppContent({ initialSettings, store, windowControl, api, platform }: Re
       event.preventDefault()
       if (modalOpen || event.repeat) return
       if (key === 'o') void controller.openDialog()
-      else {
-        const tab = activeTab(controller.store.getState())
-        if (tab) controller.closeTab(tab.id)
-      }
+      else controller.closeActiveTab()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [controller, platform, modalOpen])
+
+  // macOS 原生菜单的“关闭标签页”（⌘W）和“设置…”（⌘,）：焦点在正文 iframe 里时网页收不到键盘事件，所以由 Rust 发事件过来。
+  // 和键盘快捷键一样，有对话框时不响应。事件处理函数里读最新状态，所以监听只注册一次。
+  const settingsOpenRef = useRef(settingsOpen)
+  useEffect(() => {
+    settingsOpenRef.current = settingsOpen
+  }, [settingsOpen])
+  useEffect(() => {
+    let stopped = false
+    const unlisteners: Unlisten[] = []
+    // 注册是异步的：如果在等待期间已经卸载，注册完成后立刻取消
+    const track = (registration: Promise<Unlisten>) =>
+      registration.then(
+        (unlisten) => {
+          if (stopped) unlisten()
+          else unlisteners.push(unlisten)
+        },
+        (error: unknown) => console.error('Failed to listen for a menu event', error),
+      )
+    void track(
+      api.onCloseActiveTab(() => {
+        if (!settingsOpenRef.current && !controller.store.getState().blocked) controller.closeActiveTab()
+      }),
+    )
+    void track(
+      api.onOpenSettings(() => {
+        if (!controller.store.getState().blocked) setSettingsOpen(true)
+      }),
+    )
+    return () => {
+      stopped = true
+      for (const unlisten of unlisteners.splice(0)) unlisten()
+    }
+  }, [api, controller])
+
+  // 窗口标题跟随当前邮件（D11 补充）
+  const title = windowTitle(current)
+  useEffect(() => {
+    if (!windowControl) return
+    windowControl.setTitle(title).catch((error: unknown) => console.error('Failed to update the window title', error))
+  }, [windowControl, title])
 
   // 设置变化后立刻写到 <html>（在绘制之前）
   useLayoutEffect(() => {

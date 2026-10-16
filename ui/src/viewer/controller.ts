@@ -1,6 +1,7 @@
 // 把 D11 的命令和事件接到状态上。不依赖 React，状态都在 store 里，组件只负责渲染和调用这里的方法。
 import { ApiError, type DocumentHandle, type Unlisten, type ViewerApi } from '../api/types.ts'
 import {
+  activeTab,
   createViewerStore,
   tabHandles,
   type Level,
@@ -22,6 +23,8 @@ export interface ViewerController {
   selectTab(tabId: string): void
   /** 关闭标签页，并对它的面包屑链上的所有句柄调用 close_document */
   closeTab(tabId: string): void
+  /** 关闭当前标签页（⌘W / Ctrl+W、菜单“关闭标签页”）；没有标签页时什么也不做 */
+  closeActiveTab(): void
   /** 在当前标签页内进入嵌套邮件 */
   openNested(tabId: string, parentHandle: DocumentHandle, attachmentId: string): Promise<void>
   /** 回到面包屑的第 index 级，更深几级的文档随之关闭 */
@@ -125,6 +128,11 @@ export function createViewerController(api: ViewerApi): ViewerController {
       if (!tab) return
       dispatch({ type: 'closeTab', tabId })
       closeHandles(tabHandles(tab))
+    },
+
+    closeActiveTab() {
+      const tab = activeTab(store.getState())
+      if (tab) controller.closeTab(tab.id)
     },
 
     async openNested(tabId, parentHandle, attachmentId) {

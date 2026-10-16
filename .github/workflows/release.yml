@@ -1,0 +1,282 @@
+name: release
+
+# 只在推送 v* 标签时运行：在四个平台上构建安装包，全部上传到同一个草稿 Release，
+# 最后生成 SHA256SUMS.txt 一并上传。Release 保持草稿，检查之后手动发布（步骤见 docs/release.md）。
+on:
+  push:
+    tags: ['v*']
+
+# 创建 Release、上传安装包和校验文件都需要写入内容的权限，其他一律不给
+permissions:
+  contents: write
+
+# 同一个标签不并行跑两次；已经开始的不取消，避免留下半个 Release
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+defaults:
+  run:
+    # Windows 上默认是 PowerShell，统一用 bash 让脚本在四个平台上一致
+    shell: bash
+
+jobs:
+  # 先把草稿 Release 建好，再让四个平台的构建往里面传文件。
+  # 不能让构建任务各自按标签去找或创建：它们同时开始，会建出多个同名草稿。
+  create-release:
+    name: 创建草稿 Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      # 安装包的版本号来自 tauri.conf.json，不是标签。不一致时只提醒，不拦截：测试标签（例如 v0.0.1-test）本来就和版本号对不上
+      - name: 检查标签和版本号
+        run: |
+          conf_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          if [ "${TAG#v}" != "$conf_version" ]; then
+            echo "::warning title=标签和版本号不一致::标签是 ${TAG}，tauri.conf.json 里的版本是 ${conf_version}，安装包会按 ${conf_version} 命名。正式发布前请先改版本号再打标签。"
+          fi
+
+      - name: 创建草稿 Release（已经有同名草稿就复用）
+        id: release
+        run: |
+          # 草稿 Release 不能按标签查询，只能从列表里找
+          drafts="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
+            --jq '.[] | select(.draft) | [.id, .tag_name] | @tsv')"
+          release_id="$(awk -F '\t' -v tag="$TAG" '$2 == tag { print $1; exit }' <<< "$drafts")"
+
+          if [ -z "$release_id" ]; then
+            # 标签里带 - 的（v0.1.0-rc.1、v0.0.1-test）按预发布处理，不会成为“最新版本”
+            prerelease=false
+            case "$TAG" in *-*) prerelease=true ;; esac
+            release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$TAG" \
+              -f name="EmailFileViewer ${TAG}" \
+              -F draft=true \
+              -F prerelease="$prerelease" \
+              -F generate_release_notes=true \
+              --jq .id)"
+            echo "已创建草稿 Release ${release_id}"
+          else
+            echo "复用已有的草稿 Release ${release_id}"
+          fi
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      # 一个平台失败不影响其他平台继续上传，重新运行失败的任务即可补齐
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe: '.exe'
+          # Linux 固定用 22.04：在较旧的系统上编出来的程序才能在更多发行版上运行（design.md D10）
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            exe: ''
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            exe: ''
+          # GitHub 计划 2027 年秋退役 macos-15-intel，届时换成 macos-26-intel 或在 arm64 上交叉编译（design.md D10）
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            exe: ''
+    env:
+      SIDECAR_EXE: src-tauri/binaries/efv-sidecar-${{ matrix.target }}${{ matrix.exe }}
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Node 24：满足 Vite 8 和 jsdom，并默认支持直接运行 .ts 脚本（和 ui.yml 一致）
+      - name: 安装 Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # 第一组是 Tauri 的构建依赖，clang 和 zlib1g-dev 是 NativeAOT 需要的（见 README），
+      # libfuse2 和 patchelf 是打 AppImage 用的（linuxdeploy 本身是个 AppImage，并且要改写库的搜索路径）
+      - name: 安装 Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl wget file pkg-config \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            clang zlib1g-dev \
+            libfuse2 patchelf
+
+      # 用预编译的 Tauri CLI，省掉每个平台几分钟的编译；没有预编译包时 cargo-binstall 会自己改成从源码编译
+      - name: 安装 cargo-binstall
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall
+
+      - name: 安装 Tauri CLI
+        run: cargo binstall tauri-cli --version '^2' --locked --no-confirm
+
+      - name: 安装前端依赖
+        working-directory: ui
+        run: npm ci
+
+      # 发布前先在这个平台上把解析核心的测试和 smoke 跑一遍（design.md D10），不通过就不打包
+      - name: 运行解析核心的单元测试
+        run: dotnet test core -c Release
+
+      - name: 发布 sidecar 并运行 smoke
+        run: |
+          node scripts/build-sidecar.mjs ${{ matrix.target }}
+          "$SIDECAR_EXE" --smoke samples
+
+      # 签名凭据（任务 9.3 配置 Secrets，9.4 和 9.5 接入）。
+      # 没有配置的 Secret 在这里取到的是空字符串，而 Tauri CLI 把“已设置但为空”的环境变量当成有效值：
+      # 空的 APPLE_CERTIFICATE 会让构建在导入证书时失败。所以只导出非空的，没有配置时构建出未签名的安装包。
+      - name: 准备签名环境变量
+        env:
+          # macOS：Developer ID 证书（base64 的 .p12）、证书密码、签名身份
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS：公证用的 Apple ID、专用密码、团队 ID
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows：代码签名证书（base64 的 .pfx）和密码。预留：具体的签名渠道（Certum 或 SignPath）在 9.3 确定
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          configured=()
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+                      APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID \
+                      WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD; do
+            value="${!name}"
+            [ -n "$value" ] || continue
+            # 用随机分隔符写入 GITHUB_ENV，值里有换行也不会被截断；值仍然受 Secret 的日志遮蔽保护
+            delimiter="EFV_EOF_${RANDOM}${RANDOM}${RANDOM}"
+            {
+              echo "${name}<<${delimiter}"
+              echo "$value"
+              echo "${delimiter}"
+            } >> "$GITHUB_ENV"
+            configured+=("$name")
+          done
+          if [ ${#configured[@]} -eq 0 ]; then
+            echo "没有配置任何签名 Secret：构建未签名的安装包。"
+          else
+            echo "已配置的签名 Secret：${configured[*]}"
+          fi
+
+      # tauri-action 在构建完成后把安装包传到上面建好的草稿 Release。
+      # 用 cargo tauri 而不是 npm 的 CLI，和本地开发一致；没有配置更新器，所以不生成 latest.json 和签名文件。
+      - name: 构建并上传安装包
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: cargo tauri
+          args: --target ${{ matrix.target }}
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+
+  # 所有平台都上传完之后，对草稿 Release 里的安装包算 SHA-256，生成 SHA256SUMS.txt 传回去
+  checksums:
+    name: SHA-256 校验文件
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+
+    steps:
+      - name: 下载全部安装包
+        run: |
+          mkdir assets
+          # 草稿里的文件要按资产 id 下载；列表只取名字和 id，不下载别的
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets" \
+            --jq '.[] | [.id, .name] | @tsv' > assets.tsv
+          while IFS=$'\t' read -r id name; do
+            # 重新运行时，上一次生成的校验文件不算安装包
+            [ "$name" = "SHA256SUMS.txt" ] && continue
+            echo "下载 ${name}"
+            gh api -H "Accept: application/octet-stream" \
+              "repos/${GITHUB_REPOSITORY}/releases/assets/${id}" > "assets/${name}"
+          done < assets.tsv
+
+      # 少了任何一个平台的安装包，就不要生成校验文件，让整个发布流程失败
+      - name: 检查安装包是否齐全
+        working-directory: assets
+        run: |
+          missing=0
+          for pattern in '_x64-setup\.exe$' '_aarch64\.dmg$' '_x64\.dmg$' '_amd64\.AppImage$' '_amd64\.deb$'; do
+            found=0
+            for file in *; do
+              if [[ "$file" =~ $pattern ]]; then
+                echo "${pattern}：${file}"
+                found=1
+              fi
+            done
+            if [ "$found" -eq 0 ]; then
+              echo "::error::草稿 Release 里没有匹配 ${pattern} 的安装包"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: 生成 SHA256SUMS.txt
+        working-directory: assets
+        run: |
+          # 文件名按字节序排列，格式和 sha256sum -c 一致
+          LC_ALL=C sha256sum -- * > ../SHA256SUMS.txt
+          cat ../SHA256SUMS.txt
+          {
+            echo '### SHA-256'
+            echo
+            echo '```'
+            cat ../SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传 SHA256SUMS.txt
+        run: |
+          # 重新运行时先删掉旧的，上传同名文件会失败
+          old_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets" \
+            --jq '.[] | select(.name == "SHA256SUMS.txt") | .id')"
+          if [ -n "$old_id" ]; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${old_id}"
+          fi
+          gh api --method POST -H "Content-Type: text/plain" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=SHA256SUMS.txt" \
+            --input SHA256SUMS.txt > /dev/null
+          echo "草稿 Release：$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" --jq .html_url)"

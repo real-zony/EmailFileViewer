@@ -2,6 +2,7 @@ mod commands;
 mod dialogs;
 mod fileargs;
 mod links;
+mod menu;
 mod opening;
 mod settings;
 pub mod sidecar;
@@ -15,7 +16,7 @@ use tauri::window::Color;
 use tauri::{Manager, RunEvent, Theme, WebviewUrl, WebviewWindowBuilder, Wry};
 
 // 主窗口的属性，与原来 tauri.conf.json 中的定义一致
-const MAIN_WINDOW_LABEL: &str = "main";
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 const MAIN_WINDOW_TITLE: &str = "EmailFileViewer";
 const MAIN_WINDOW_SIZE: (f64, f64) = (1200.0, 800.0);
 const MAIN_WINDOW_MIN_SIZE: (f64, f64) = (800.0, 560.0);
@@ -35,8 +36,8 @@ fn from_theme(theme: Theme) -> ResolvedMode {
 }
 
 // 在创建窗口之前读取已保存的设置和系统语言，通过 initialization_script 在首次绘制前把它们交给页面，
-// 并把窗口底色设成所选配色方案的底色。窗口先隐藏，设好底色后再显示。
-fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
+// 并把窗口底色设成所选配色方案的底色。窗口先隐藏，设好底色后再显示。返回用到的初始设置（菜单文字也用其中的语言）。
+fn create_main_window(app: &tauri::App) -> tauri::Result<InitialSettings> {
     let for_links = app.handle().clone();
     let for_navigation = app.handle().clone();
     let colors = WindowColors::embedded();
@@ -93,7 +94,8 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
         background.to_hex(),
     );
 
-    window.show()
+    window.show()?;
+    Ok(initial)
 }
 
 /// 把一组文件作为一个打开批次提交。登记之前（极早期的系统事件）提交的先放在 `EARLY` 里。
@@ -150,6 +152,8 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // 原生菜单的事件（只有 macOS 会设置菜单）
+        .on_menu_event(|app, event| menu::handle(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
             commands::open_with_dialog,
@@ -165,7 +169,12 @@ pub fn run() {
             app.manage(service.clone());
             let coordinator = OpenCoordinator::for_app(app.handle().clone(), service);
             app.manage(coordinator.clone());
-            create_main_window(app)?;
+            let initial = create_main_window(app)?;
+            // 只有 macOS 设置菜单栏；Windows 和 Linux 不设置，快捷键沿用网页内的处理（D11 补充）
+            #[cfg(target_os = "macos")]
+            menu::install(app.handle(), initial.language);
+            #[cfg(not(target_os = "macos"))]
+            let _ = initial;
 
             // 启动参数里的文件（Windows、Linux 上双击文件，或命令行指定）；macOS 的双击走 RunEvent::Opened。
             // 前端调用 app_ready 之前先排队。

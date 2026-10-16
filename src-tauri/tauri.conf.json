@@ -25,7 +25,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "dmg", "appimage", "deb"],
+    "publisher": "real-zony",
+    "copyright": "Copyright © 2026 Zony",
+    "category": "Productivity",
+    "shortDescription": "Desktop viewer for .eml and .msg email files",
+    "longDescription": "EmailFileViewer opens .eml and .msg email files and shows them safely on your computer. Messages are parsed locally; nothing is uploaded unless you choose to.",
+    "homepage": "https://github.com/real-zony/EmailFileViewer",
     "externalBin": ["binaries/efv-sidecar"],
     "icon": [
       "icons/32x32.png",
@@ -49,6 +55,20 @@
         "mimeType": "application/vnd.ms-outlook",
         "role": "Viewer"
       }
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": {
+        "languages": ["English", "SimpChinese"]
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "15.0"
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/main.desktop"
+      }
+    }
   }
 }

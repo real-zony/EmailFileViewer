@@ -1,11 +1,12 @@
 import type { Mode, PaletteId } from '../theme/palettes.ts'
 import { nativeTheme, resolveMode, windowBackground } from './appearance.ts'
 
-// 原生窗口的外观控制：底色和标题栏主题。正式运行时由 Tauri 实现（见 platform/tauri.ts）。
+// 原生窗口的控制：底色、标题栏主题和窗口标题。正式运行时由 Tauri 实现（见 platform/tauri.ts）。
 export interface WindowControl {
   setBackgroundColor(color: string): Promise<void>
   /** null 表示跟随系统 */
   setTheme(theme: 'light' | 'dark' | null): Promise<void>
+  setTitle(title: string): Promise<void>
 }
 
 // 把当前模式和配色同步到原生窗口。两项互不依赖，一项失败不影响另一项。

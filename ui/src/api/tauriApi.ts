@@ -51,6 +51,9 @@ export function createTauriApi(): ViewerApi {
     onDocumentOpened: (handler) => on<DocumentOpenedEvent>(EVENTS.documentOpened, handler),
     onDocumentOpenFailed: (handler) => on<DocumentOpenFailedEvent>(EVENTS.documentOpenFailed, handler),
     onOpenBatchFinished: (handler) => on<OpenBatchFinishedEvent>(EVENTS.openBatchFinished, handler),
+    // 菜单事件没有内容
+    onCloseActiveTab: (handler) => on<null>(EVENTS.closeActiveTab, () => handler()),
+    onOpenSettings: (handler) => on<null>(EVENTS.openSettings, () => handler()),
     // 只取文件数量，路径不往外传；真正的打开由 Rust 在窗口的拖放事件里处理
     onDragDrop: (handler) =>
       getCurrentWebview().onDragDropEvent((event) => {

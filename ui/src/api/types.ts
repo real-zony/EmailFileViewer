@@ -154,6 +154,12 @@ export interface ViewerApi {
   onDocumentOpenFailed(handler: (event: DocumentOpenFailedEvent) => void): Promise<Unlisten>
   onOpenBatchFinished(handler: (event: OpenBatchFinishedEvent) => void): Promise<Unlisten>
   onDragDrop(handler: (event: DragEvent) => void): Promise<Unlisten>
+
+  // ---- 原生菜单（macOS）发来的事件，不带内容（D11 补充）。“打开”由 Rust 直接处理，不经过前端 ----
+  /** 菜单“关闭标签页”（⌘W）：关闭当前标签页 */
+  onCloseActiveTab(handler: () => void): Promise<Unlisten>
+  /** 菜单“设置…”（⌘,）：打开设置对话框 */
+  onOpenSettings(handler: () => void): Promise<Unlisten>
 }
 
 /** 命令名和事件名，真实实现和测试共用 */
@@ -171,4 +177,6 @@ export const EVENTS = {
   documentOpened: 'efv://document-opened',
   documentOpenFailed: 'efv://document-open-failed',
   openBatchFinished: 'efv://open-batch-finished',
+  closeActiveTab: 'efv://close-active-tab',
+  openSettings: 'efv://open-settings',
 } as const
