@@ -1,0 +1,11 @@
+From: Zhang San <zhang.san@example.com>
+To: Alice Zhang <alice.zhang@example.com>
+Subject: =?GB18030?B?R0IxODAzMCDR+bG+o7qw/Lqsy8TX1r3a19a3+w==?=
+Date: Thu, 1 Oct 2026 10:05:00 +0800
+Message-Id: <charset-gb18030@samples.efv.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=gb18030
+Content-Transfer-Encoding: 8bit
+
+GB18030 编码的正文，其中包含需要四字节表示的字符：𠮷（U+20BB7）和 𠀀（U+20000）。
+同时也包含欧元符号 € 和普通汉字。

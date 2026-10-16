@@ -1,0 +1,62 @@
+From: Erin Xu <erin.xu@example.org>
+Date: Thu, 01 Oct 2026 20:00:00 +0800
+Subject: Executable and script attachments (placeholders)
+Message-Id: <attachments-executables@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+
+Each attachment is plain text. None of them is a real executable or script.
+
+------=_efv_01
+Content-Type: application/x-msdownload; name=installer.exe
+Content-Disposition: attachment; filename=installer.exe
+Content-Transfer-Encoding: base64
+
+UExBQ0VIT0xERVIgZm9yIGluc3RhbGxlci5leGU6IHBsYWluIHRleHQsIG5vdCBleGVjdXRhYmxl
+IGNvZGUuCg==
+
+------=_efv_01
+Content-Type: application/x-bat; name=run-me.bat
+Content-Disposition: attachment; filename=run-me.bat
+Content-Transfer-Encoding: base64
+
+UExBQ0VIT0xERVIgZm9yIHJ1bi1tZS5iYXQ6IHBsYWluIHRleHQsIG5vdCBleGVjdXRhYmxlIGNv
+ZGUuCg==
+
+------=_efv_01
+Content-Type: text/plain; name=setup.ps1
+Content-Disposition: attachment; filename=setup.ps1
+Content-Transfer-Encoding: base64
+
+UExBQ0VIT0xERVIgZm9yIHNldHVwLnBzMTogcGxhaW4gdGV4dCwgbm90IGV4ZWN1dGFibGUgY29k
+ZS4K
+
+------=_efv_01
+Content-Type: application/x-sh; name=install.sh
+Content-Disposition: attachment; filename=install.sh
+Content-Transfer-Encoding: base64
+
+UExBQ0VIT0xERVIgZm9yIGluc3RhbGwuc2g6IHBsYWluIHRleHQsIG5vdCBleGVjdXRhYmxlIGNv
+ZGUuCg==
+
+------=_efv_01
+Content-Type: application/octet-stream; name=launcher.command
+Content-Disposition: attachment; filename=launcher.command
+Content-Transfer-Encoding: base64
+
+UExBQ0VIT0xERVIgZm9yIGxhdW5jaGVyLmNvbW1hbmQ6IHBsYWluIHRleHQsIG5vdCBleGVjdXRh
+YmxlIGNvZGUuCg==
+
+------=_efv_01
+Content-Type: application/octet-stream; name=Tool.app
+Content-Disposition: attachment; filename=Tool.app
+Content-Transfer-Encoding: base64
+
+UExBQ0VIT0xERVIgZm9yIFRvb2wuYXBwOiBwbGFpbiB0ZXh0LCBub3QgZXhlY3V0YWJsZSBjb2Rl
+Lgo=
+
+------=_efv_01--

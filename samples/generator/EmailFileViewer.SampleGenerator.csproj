@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    样本邮件生成器。独立于 core/EmailFileViewer.sln，不参与产品构建和 CI。
+    不使用 core/ 下的 Directory.Packages.props，版本直接写在这里。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>EmailFileViewer.SampleGenerator</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" Version="4.18.1" />
+    <PackageReference Include="MsgKit" Version="3.0.6" />
+    <!-- MsgKit 只能保存"按值"的附件；嵌套邮件需要直接改写复合文档，所以显式引用，版本和 MsgKit 依赖的一致 -->
+    <PackageReference Include="OpenMcdf" Version="3.3.0" />
+    <!-- 校验生成的 MSG 能被读取；版本和 core 保持一致 -->
+    <PackageReference Include="MsgReader" Version="6.2.0" />
+    <!-- MimeKit 和 MsgReader 带进来的 10.0.0 / 10.0.12 有已公开的漏洞，和 core 一样固定到 10.0.13 -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
+</Project>

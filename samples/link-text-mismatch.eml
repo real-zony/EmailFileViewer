@@ -1,0 +1,30 @@
+From: Account Notice <notice@example.com>
+Date: Thu, 01 Oct 2026 16:00:00 +0800
+Subject: Verify your account (link text does not match target)
+Message-Id: <link-text-mismatch@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+
+Link text paypal.com points to https://example.com/not-paypal
+
+------=_efv_01
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<html><body>
+<p>Dear customer, please verify your account.</p>
+<p>1. Domain-only text: <a href=3D"https://example.com/not-paypal">paypal.c=
+om</a></p>
+<p>2. URL text with a different host: <a href=3D"https://example.com/not-pa=
+ypal">https://www.paypal.com/signin</a></p>
+<p>3. Spoofed title attribute: <a href=3D"https://example.com/not-paypal" t=
+itle=3D"https://www.paypal.com/">Hover me</a></p>
+<p>4. Control, text equals target: <a href=3D"https://example.com/">https:/=
+/example.com/</a></p>
+</body></html>=
+
+------=_efv_01--

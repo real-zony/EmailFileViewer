@@ -1,0 +1,43 @@
+From: Bob Li <bob.li@example.org>
+Date: Thu, 01 Oct 2026 11:00:00 +0800
+Subject: Forwarded as attachment: a .eml file
+Message-Id: <attachment-eml-file@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Two attachments: the same original message, once as an opaque .eml file and=
+ once as message/rfc822.
+
+------=_efv_01
+Content-Type: application/octet-stream; name=forwarded-as-file.eml
+Content-Disposition: attachment; filename=forwarded-as-file.eml
+Content-Transfer-Encoding: base64
+
+RnJvbTogRXJpbiBYdSA8ZXJpbi54dUBleGFtcGxlLm9yZz4NCkRhdGU6IFdlZCwgMzAgU2VwIDIw
+MjYgMTA6MDA6MDAgKzA4MDANClN1YmplY3Q6IE9yaWdpbmFsIG1lc3NhZ2UgdGhhdCB3YXMgZm9y
+d2FyZGVkIGFzIGFuIGF0dGFjaG1lbnQNCk1lc3NhZ2UtSWQ6IDxmb3J3YXJkZWQtb3JpZ2luYWxA
+c2FtcGxlcy5lZnYuaW52YWxpZD4NClRvOiBCb2IgTGkgPGJvYi5saUBleGFtcGxlLm9yZz4NCk1J
+TUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgN
+Cg0KVGhpcyBpcyB0aGUgb3JpZ2luYWwgbWVzc2FnZSB0aGF0IHdhcyBhdHRhY2hlZCBhcyBhIC5l
+bWwgZmlsZS4NCg==
+
+------=_efv_01
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename=forwarded-as-rfc822.eml
+
+From: Erin Xu <erin.xu@example.org>
+Date: Wed, 30 Sep 2026 10:00:00 +0800
+Subject: Original message that was forwarded as an attachment
+Message-Id: <forwarded-original@samples.efv.invalid>
+To: Bob Li <bob.li@example.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+This is the original message that was attached as a .eml file.
+
+------=_efv_01--
