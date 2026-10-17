@@ -132,6 +132,28 @@ internal static class Verification
         var mismatch = LoadEml(root, "link-text-mismatch.eml").HtmlBody!;
         Require(mismatch.Contains("<a href=\"https://example.com/not-paypal\">paypal.com</a>", StringComparison.Ordinal), "link-text-mismatch.eml 含文字为 paypal.com、地址为 https://example.com/not-paypal 的链接");
 
+        var links = LoadEml(root, "links-anchors-and-schemes.eml").HtmlBody!;
+        foreach (var token in new[]
+                 {
+                     "<a href=\"#section-3\">", "<a href=\"#\">", "<a href=\"#bottom\" target=\"_blank\">",
+                     "<a href=\"https://example.com/page\">", "<a href=\"http://example.com/plain\">",
+                     "<a href=\"mailto:someone@example.com\">", "<a href=\"tel:+10000000000\">", "<a href=\"file:///etc/hosts\">",
+                     "<a href=\"page.html\">", "<a href=\"?x=1\">", "<a href=\"/root\">", "<a href=\"\">",
+                     "<a xlink:href=\"#section-2\">", "<a href=\"https://example.com/svg\">",
+                     "<area ", "href=\"https://example.com/area\"", "usemap=\"#efv-map\"",
+                 })
+        {
+            Require(links.Contains(token, StringComparison.Ordinal), $"links-anchors-and-schemes.eml 含 {token}");
+        }
+
+        foreach (var id in new[] { "section-1", "section-2", "section-3", "section-4", "bottom" })
+        {
+            Require(links.Contains($"<p id=\"{id}\"", StringComparison.Ordinal), $"links-anchors-and-schemes.eml 有 id 为 {id} 的段落");
+        }
+
+        Require(links.LastIndexOf("<p id=\"", StringComparison.Ordinal) == links.IndexOf("<p id=\"bottom\"", StringComparison.Ordinal), "links-anchors-and-schemes.eml 的最后一个带 id 的段落是 bottom");
+        Require(links.Length > 8_000, "links-anchors-and-schemes.eml 的正文足够长，页内锚点能看出滚动");
+
         var unsafeNames = LoadEml(root, "attachments-unsafe-names.eml").Attachments.OfType<MimePart>().Select(part => part.FileName).ToList();
         foreach (var name in new[] { "../../.bashrc", "CON.txt", "a:b*c?.txt" })
         {

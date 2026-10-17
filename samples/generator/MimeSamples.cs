@@ -320,6 +320,72 @@ internal static class MimeSamples
                 """,
         }.ToMessageBody();
         output.Write("link-text-mismatch.eml", mismatch);
+
+        var links = NewMessage("links-anchors-and-schemes", "Links: anchors and schemes", new MailboxAddress("Link Tester", "links@example.com"), Personas.BaseDate.AddHours(15));
+        links.To.Add(Personas.Alice);
+        links.Body = new BodyBuilder
+        {
+            TextBody = "Open this message in the viewer and click every link in the HTML version.\nExpected behavior is listed in samples/README.md.\n",
+            HtmlBody = LinksHtml(),
+        }.ToMessageBody();
+        output.Write("links-anchors-and-schemes.eml", links);
+    }
+
+    // 链接验收样本：页内锚点要能看出滚动效果，所以顶部是目录，下面是 5 个很长的段落（每段至少 420px 高），最后一段的 id 是 bottom
+    private static string LinksHtml()
+    {
+        // 1x1 的 PNG，放大成 160x48 当图像映射的底图
+        const string pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+        static string Paragraph(string id, string marker)
+        {
+            var filler = string.Concat(Enumerable.Repeat("This sentence only exists to make the paragraph long enough that scrolling to it is clearly visible. ", 20));
+            return $"<p id=\"{id}\" style=\"min-height:420px;border-left:4px solid #888;padding-left:12px;margin:0 0 32px 0;\"><b>{marker}</b> {filler}</p>";
+        }
+
+        return $$"""
+            <html>
+            <head><meta charset="utf-8"><title>Links: anchors and schemes</title></head>
+            <body>
+            <h1>Links: anchors and schemes</h1>
+            <h2>Table of contents</h2>
+            <ol>
+            <li><a href="#section-1">Section 1</a></li>
+            <li><a href="#section-2">Section 2</a></li>
+            <li><a href="#section-3">Section 3</a></li>
+            <li><a href="#section-4">Section 4</a></li>
+            <li><a href="#bottom" target="_blank">Bottom (this anchor carries target="_blank")</a></li>
+            </ol>
+            <h2>Link kinds</h2>
+            <ul>
+            <li><a href="https://example.com/page">https link</a></li>
+            <li><a href="http://example.com/plain">http link</a></li>
+            <li><a href="mailto:someone@example.com">mailto link</a></li>
+            <li><a href="tel:+10000000000">tel link</a></li>
+            <li><a href="file:///etc/hosts">file link</a></li>
+            <li><a href="page.html">relative link: page.html</a></li>
+            <li><a href="?x=1">relative link: ?x=1</a></li>
+            <li><a href="/root">relative link: /root</a></li>
+            <li><a href="">empty link: href=""</a></li>
+            </ul>
+            <h2>SVG links</h2>
+            <svg width="360" height="70" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <a xlink:href="#section-2"><text x="10" y="25" fill="#06c">SVG link to #section-2 (xlink:href)</text></a>
+            <a href="https://example.com/svg"><text x="10" y="55" fill="#06c">SVG link to https://example.com/svg (href)</text></a>
+            </svg>
+            <h2>Image map</h2>
+            <p>The image below has one clickable area.</p>
+            <map name="efv-map"><area shape="rect" coords="0,0,160,48" href="https://example.com/area" alt="area link"></map>
+            <img src="data:image/png;base64,{{pixel}}" width="160" height="48" usemap="#efv-map" alt="image map">
+            <h2>Sections</h2>
+            {{Paragraph("section-1", "SECTION-1-MARKER")}}
+            {{Paragraph("section-2", "SECTION-2-MARKER")}}
+            {{Paragraph("section-3", "SECTION-3-MARKER")}}
+            {{Paragraph("section-4", "SECTION-4-MARKER")}}
+            <p id="bottom" style="min-height:420px;border-left:4px solid #888;padding-left:12px;margin:0;"><b>BOTTOM-MARKER</b> This is the last paragraph. <a href="#">Back to the top (href="#")</a></p>
+            </body>
+            </html>
+            """;
     }
 
     private static string MaliciousHtml()
