@@ -71,7 +71,7 @@
 ## 9. 打包、签名与发布（app-distribution，design D10）
 
 - [x] 9.1 配置安装包：Windows 用 NSIS 生成 `.exe` 并内置 WebView2 引导安装，macOS 生成 arm64 和 x64 两个 `.dmg`（或用 `lipo` 合并 sidecar 后生成通用版），Linux 生成 AppImage 和声明了依赖的 `.deb`；验证在 CI 中三个平台都产出这些文件
-- [ ] 9.2 新增 `.github/workflows/release.yml`：推送 `v*` 标签时在四个平台上构建，创建草稿 Release 并附上 SHA-256 校验文件；在 `docs/release.md` 中写明发版步骤和需要配置的 Secrets；验证推送测试标签 `v0.0.1-test` 后生成的草稿 Release 包含全部安装包和校验文件
+- [x] 9.2 新增 `.github/workflows/release.yml`：推送 `v*` 标签时在四个平台上构建，创建草稿 Release 并附上 SHA-256 校验文件；在 `docs/release.md` 中写明发版步骤和需要配置的 Secrets；验证推送测试标签 `v0.0.1-test` 后生成的草稿 Release 包含全部安装包和校验文件
 - [ ] 9.3 **（需要用户操作）** 准备 Apple Developer Program 账号和 Windows 签名渠道（Certum 或 SignPath），把凭据配置进 GitHub Secrets；验证 `docs/release.md` 中列出的 Secrets 都已配置
 - [ ] 9.4 在 release 流程中加入 macOS 签名和公证，并对应用和 sidecar 执行 `codesign -dv` 和 `spctl -a -vv` 检查；验证在一台干净的 Mac 上从浏览器下载 dmg 后首次打开不出现拦截提示
 - [ ] 9.5 通过 `signCommand` 接入 Windows 签名，对安装程序、主程序和 sidecar 执行 `signtool verify /pa`；验证在 Windows 上运行安装程序时显示发布者名称

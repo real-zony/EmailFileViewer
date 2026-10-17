@@ -258,6 +258,25 @@
 - **Windows 和 Linux**：不显示菜单栏，与草稿保持一致；快捷键沿用网页内的处理。限制是焦点在正文里时 Ctrl+O/Ctrl+W 不生效，点一下正文以外的区域即可恢复。
 - **窗口标题**：前端调用 `setTitle`，有邮件时显示 "<主题，没有主题时用文件名> — EmailFileViewer"，空状态时显示 "EmailFileViewer"。需要 `core:window:allow-set-title` 权限。
 
+### D12. 发布前审查后的加固
+
+整分支审查没有发现 Critical 问题：邮件内容既不能执行脚本，也不能调用 IPC。下面这些加固是根据审查结论做出的决定，具体实现见对应提交。
+
+- **会话临时目录**：不再放在共享的 `/tmp`，改用每个用户自己的目录：Linux 依次用 `$XDG_CACHE_HOME`、`~/.cache`，都不可用时才用 `$XDG_RUNTIME_DIR`（它通常是容量很小的 tmpfs，大附件可能写满）；macOS 用每用户的 `TMPDIR`；Windows 用 `%LOCALAPPDATA%\Temp`。目录链上的每一级都检查不是符号链接、属主是当前用户、权限为 0700。清理时只删除名字为 32 位十六进制的会话目录，并且不跟随链接。这样可以防止多用户系统上的符号链接攻击。
+- **附件的"来自网络"标记**：提取和保存出来的附件，Windows 上写入 `Zone.Identifier`（ZoneId=3），macOS 上写入 `com.apple.quarantine`。这样 Office 宏文档会进入受保护视图，`.dmg`、`.terminal` 等文件也要经过 Gatekeeper。由 Rust 拿到路径后统一处理，写入失败只记日志。
+- **可执行类型清单再次扩充**：Windows 增加 `.chm .appref-ms .diagcab .settingcontent-ms .library-ms .search-ms .wsc .sct .inf .msp`，macOS 增加 `.dmg .terminal .fileloc .inetloc .webloc`。前端的判断与 Core 保持一致。
+- **网络请求的补充防线**：
+  - 保留的 `<link>` 一律把 rel 改写为 `stylesheet`，去掉 preconnect、dns-prefetch 等。
+  - srcdoc 中加入 `x-dns-prefetch-control: off`。
+  - 放宽后的 CSP 增加 `media-src`，与"包含远程内容"的判断保持一致。
+- **资源上限**：
+  - CSS 清理不再使用会回溯的正则，并限制单段样式的长度。
+  - 内联 data URI 的总字节数和正文 HTML 的长度都有上限，超出的内嵌图片引用不再内联，但图片仍然出现在附件列表里。
+  - 所有 MIME 解析都设置 `MaxMimeDepth`，嵌套邮件的大小改为不递归计算。
+  - Rust 读取 sidecar 的 stdout 时，单行长度有上限。
+- **写入的完整性**："全部保存"先写临时文件，再以不覆盖的方式改名。stdin 关闭后，sidecar 会取消进行中的请求，宽限期结束后退出。
+- **未签名的 macOS 内测包**：没有证书时使用 ad-hoc 签名，测试者需要在"隐私与安全性"中点"仍要打开"。正式发布仍以 9.4 的 Developer ID 签名和公证为准。
+
 ## Risks / Trade-offs
 
 - [MsgReader 或 MimeKit 不兼容 AOT] → 按 D3 退回自包含的 JIT 发布，并补上 macOS entitlements；把这个实验排在第一个任务。
@@ -283,6 +302,8 @@
 - [macOS 最低支持 15 会排除较旧的 Mac] → 这是 .NET 10 官方支持范围决定的；后续可以在 macOS 13/14 上实测，确认能运行后再放宽说明。
 - [Windows 签名服务对个人开发者的身份审核耗时较长] → 尽早申请；审核通过前的内部测试版本不签名，只在 GitHub 上以预发布形式提供。
 - [三个平台的 WebView 渲染不一致，同一封邮件显示略有不同] → 查看器接受这种差异；需要一致输出的场景（PDF）交给服务端。
+
+- [GitHub 的 ubuntu-22.04 runner 预计在 2027 年上半年退役（以官方公告为准）] → 直接改用 24.04 会抬高 glibc 基线。届时改为在 22.04 的容器里构建 Linux 包，或者重新评估最低支持的发行版。
 
 ## Migration Plan
 
