@@ -13,8 +13,8 @@ EmailFileViewer.Sidecar --stdio
 
 - **stdout 只输出协议消息**，每条一行，UTF-8 无 BOM，行尾固定是 `\n`（Windows 上也是，不是 `\r\n`，见“9. 平台差异”）。诊断日志一律写 **stderr**（UTF-8，只在发生未预期的错误时才写）。
 - **就绪判断**：进程启动后发送 `system.ping`，收到 `{"protocolVersion":1}` 即表示 sidecar 已就绪。进程启动本身不输出任何内容。
-- **退出**：关闭 sidecar 的 stdin（EOF）。sidecar 会先处理完已经收到的请求并写出响应，然后关闭所有文档、删除本次会话的临时目录，以退出码 0 退出。
-- 收到 SIGINT（Ctrl+C）或 SIGTERM 时也走同样的清理，退出码 130。
+- **退出**：关闭 sidecar 的 stdin（EOF）。已经收到的请求有 **2 秒宽限时间**处理完并写出响应；到时间还没完成的请求会被取消（不再有响应），sidecar 再等最多约 0.5 秒让它们收尾，不管有没有收尾完都继续退出：关闭所有文档、删除本次会话的临时目录，以退出码 0 退出。也就是说，关闭 stdin 之后进程最多约 2.5 秒就会退出，不会被一个很大或畸形的文件拖住；正常的请求（毫秒到几百毫秒）不受影响。
+- 收到 SIGINT（Ctrl+C）或 SIGTERM 时也走同样的清理，退出码 130。进行中的请求立即被取消，最多再等约 0.5 秒。
 - stdout 被对方关闭（写入时 IO 错误）时停止处理，退出码 1。
 - `--smoke <目录>` 命令仍然可用（解析目录里的全部邮件，用于 CI 验证发布产物），与 `--stdio` 无关。
 
@@ -115,11 +115,21 @@ this is not json
 | `subject` | string \| null | 主题 |
 | `sentAtUtc` | string \| null | 发送时间，统一换算成 UTC，带 `Z` 的 ISO 8601（例如 `2026-10-01T02:00:00Z`）；没有可解析的日期时为 `null` |
 | `dateHeaderRaw` | string \| null | 原始 `Date` 邮件头，界面悬停时用它显示邮件原本的时区；MSG 通常没有 |
-| `body` | `{ "sourceFormat": string, "html": string \| null }` | `sourceFormat` 是 `None`、`Html`、`Rtf`、`PlainText` 之一，表示正文来自哪种格式；`html` 是**已经清理过**的 HTML（`cid:` 图片已换成 `data:` URI），没有正文时为 `null` |
-| `attachments` | `EmailAttachment[]` | 附件列表，不含已内嵌进正文的图片 |
+| `body` | `{ "sourceFormat": string, "html": string \| null }` | `sourceFormat` 是 `None`、`Html`、`Rtf`、`PlainText` 之一，表示正文来自哪种格式；`html` 是**已经清理过**的 HTML（`cid:` 图片已换成 `data:` URI），没有正文时为 `null`。为防止恶意构造的邮件把正文撑到几亿字符，有三个上限（见下方“正文的大小上限”） |
+| `attachments` | `EmailAttachment[]` | 附件列表，不含已内嵌进正文的图片；有引用因为超出内嵌上限没能内嵌的图片仍然在列表里 |
 | `isSigned` | boolean | 带有 S/MIME 数字签名；**签名是否有效不验证**，界面要注明“未验证” |
 | `isEncrypted` | boolean | S/MIME 加密，无法显示正文（`body.sourceFormat` 为 `None`） |
 | `hasRemoteContent` | boolean | 正文引用了远程资源（图片、样式表、字体） |
+
+**正文的大小上限**（Core 里的具名常量）：
+
+| 上限 | 取值 | 超出时 |
+|------|------|--------|
+| 内嵌图片的 `data:` URI 总长度（`InlineResourceResolver.MaxInlineDataUriLength`） | 16 MiB | 同一张图每处引用都会输出一份完整的 URI，累计超过上限后，其余引用不再内嵌：`<img>` 等属性去掉地址，CSS 里的 `url()` 换成 `url("about:blank")`；图片留在附件列表里，可以保存 |
+| 正文 HTML 的总长度（`HtmlSanitizer.MaxOutputLength`） | 32 MiB（字符） | 在上限处截断，后面的内容丢弃 |
+| 单段样式（`<style>` 的文本或 `style` 属性）的长度（`CssSanitizer.MaxStyleTextLength`） | 1 MiB（字符） | 整段样式丢弃 |
+
+另外，MIME 嵌套（multipart 套 multipart、邮件里再带邮件）最多解析 64 层（`MimeParserOptions.MaxMimeDepth`），更深的部分当作普通附件内容，不再往里解析；作为附件的嵌套邮件仍然可以用 `email.openNested` 逐层打开。
 
 `EmailAttachment`：`{ "id": string, "fileName": string \| null, "size": number, "mimeType": string \| null, "isNestedEmail": boolean }`。
 `id` 只在所属文档内有意义，是不透明字符串，同一个文件每次解析得到的 `id` 都一样。`size` 是字节数。
@@ -304,8 +314,8 @@ this is not json
 1. 清理文件名：去掉路径成分（`../../.bashrc` 变成 `.bashrc`）、替换各平台的非法字符、处理 Windows 保留名（`CON.txt` 变成 `_CON.txt`）、限制长度；没有文件名时用 `attachment`。
 2. 目标文件夹里已有同名文件（或前面的附件刚用了这个名字）时生成 `name (1).ext`、`name (2).ext`……
 3. 确认最终路径在目标文件夹之内。
-4. 用“只创建、不覆盖”的方式创建文件。取名之后、创建之前别的进程抢先创建了同名文件时，创建会失败，这时重新取名，绝不覆盖。
-5. 单个附件失败（磁盘满等）记入 `failed`，不影响其他附件；失败附件留下的残缺文件会被删除。`failed[].code` 是 `write_failed` 或 `internal_error`。
+4. 先写进目标文件夹里的临时文件（`.efv-<随机>.tmp`），写完并落盘后，再用“只改名、不覆盖”的方式改成最终名字。取名之后、改名之前别的进程抢先创建了同名文件时，改名会失败，这时重新取名，绝不覆盖。所以最终名字的文件一定是完整的；进程在写入过程中被强行结束，文件夹里最多留下一个临时文件。
+5. 单个附件失败（磁盘满等）记入 `failed`，不影响其他附件；失败附件的临时文件会被删除。`failed[].code` 是 `write_failed` 或 `internal_error`。
 
 文档没有附件时返回两个空数组。可执行文件和脚本同样会被保存。
 
@@ -337,8 +347,8 @@ this is not json
 
 行为：
 
-- **可执行文件和脚本直接拒绝**（`executable_refused`），什么都不写。按清理后文件名的最后一个扩展名判断，不区分大小写，`invoice.pdf.exe` 也算可执行。扩展名清单见设计文档 D6：Windows（`.exe .bat .cmd .com .msi .ps1 .vbs .js .jse .wsf .scr .lnk .hta .cpl`）、macOS（`.app .command .pkg`）、Linux（`.sh .desktop .AppImage .run`），以及 `.jar .vbe .ws .wsh .psm1 .psd1 .ps1xml .reg .msc .scf .url .pif .msix .msixbundle .appx .appxbundle .appinstaller .application .xll .iso .img .vhd .vhdx`。不论来自哪个系统，只要扩展名在表里就拒绝。
-- 文件写在 `<系统临时目录>/EmailFileViewer/sessions/<会话 Id>/<docId>/<清理后的文件名>`，同一个文档里两个附件重名时第二个是 `name (1).ext`。先写临时文件再改名，打开程序不会读到写了一半的文件。
+- **可执行文件和脚本直接拒绝**（`executable_refused`），什么都不写。按清理后文件名的最后一个扩展名判断，不区分大小写，`invoice.pdf.exe` 也算可执行。扩展名清单见设计文档 D6：Windows（`.exe .bat .cmd .com .msi .ps1 .vbs .js .jse .wsf .scr .lnk .hta .cpl`，以及 `.chm .appref-ms .diagcab .settingcontent-ms .library-ms .search-ms .wsc .sct .inf .msp`）、macOS（`.app .command .pkg`，以及 `.dmg .terminal .fileloc .inetloc .webloc`）、Linux（`.sh .desktop .AppImage .run`），以及 `.jar .vbe .ws .wsh .psm1 .psd1 .ps1xml .reg .msc .scf .url .pif .msix .msixbundle .appx .appxbundle .appinstaller .application .xll .iso .img .vhd .vhdx`。不论来自哪个系统，只要扩展名在表里就拒绝。
+- 文件写在 `<每个用户自己的临时目录>/EmailFileViewer/sessions/<会话 Id>/<docId>/<清理后的文件名>`（临时目录的位置见“7. 文档与临时目录的生命周期”），同一个文档里两个附件重名时第二个是 `name (1).ext`。先写临时文件再改名，打开程序不会读到写了一半的文件。
 - 同一个附件再次提取时，直接返回上次的路径（文件还在的话）。
 - 路径的使用方式由 Rust 决定；sidecar 不负责打开文件。
 
@@ -367,10 +377,16 @@ this is not json
 
 - `docId` 由 sidecar 分配（`d1`、`d2`……，进程内递增，不重复使用），在 `email.open` 和 `email.openNested` 的结果里返回。它只在这个 sidecar 进程内有效；sidecar 重启后，之前所有的 `docId` 都失效（调用方需要重新打开）。
 - 解析结果缓存在内存里，保存和提取附件时不需要重新读文件，原文件也不被占用。文档一直保留到 `document.close` 或进程退出。
-- 本次会话的临时目录 `<系统临时目录>/EmailFileViewer/sessions/<会话 Id>/` 在启动时创建（Unix 上只有当前用户可访问），目录里有一个一直被独占打开的 `.lock` 文件。
-  - **启动时**删除其他会话留下的目录。加得上 `.lock` 锁的才算“已经结束的会话”；锁被占着的说明那个会话还活着（多个实例同时运行），不会动它。
+- 本次会话的临时目录 `<基础目录>/EmailFileViewer/sessions/<会话 Id>/` 在启动时创建，目录里有一个一直被独占打开的 `.lock` 文件。`<会话 Id>` 是 32 位小写十六进制。
+  - **基础目录是每个用户自己的目录，不用多个用户共享的 `/tmp`**（共享目录里别的用户可以抢先创建同名目录或符号链接，把清理和写入引到别处）。按顺序取第一个可用的：
+    - Linux：`$XDG_CACHE_HOME`，然后 `~/.cache`，最后才是 `$XDG_RUNTIME_DIR`（它通常是容量很小的 tmpfs，提取大附件可能写满，所以只作退路）
+    - macOS：`$TMPDIR`（系统本来就给每个用户一个），然后 `~/Library/Caches`
+    - Windows：`%LOCALAPPDATA%\Temp`，然后 `%TEMP%`
+  - **基础目录必须存在**，Unix 上还要求其他用户没有写权限（`TMPDIR` 被设成 `/tmp` 这类谁都能写的目录时不用它）。
+  - **`EmailFileViewer`、`sessions` 两级目录和会话目录都要检查**：不能是符号链接（Windows 上还包括联接点）；Unix 上只有当前用户有权限（权限太宽就收紧到 `0700`，改不了权限说明它不是当前用户的，这个位置就不用）。检查不通过就换下一个基础目录，全都不行就不创建会话目录。
+  - **启动时**清理其他会话留下的目录。只删除名字是 32 位小写十六进制、本身是真正目录（不是符号链接）的子目录，删除时不会进到符号链接指向的地方；加得上 `.lock` 锁的才算“已经结束的会话”，锁被占着的说明那个会话还活着（多个实例同时运行），不会动它。其他名字的目录和文件一概不动。
   - **退出时**（stdin EOF、SIGINT、SIGTERM）删除本会话的目录。删除失败（例如文件仍被外部程序打开，Windows 上常见）直接忽略，留到下次启动时清理。被强行结束（SIGKILL）的会话也在下次启动时清理。
-- 系统临时目录不可写时，sidecar 仍然能解析邮件、保存附件，只有 `attachment.extractForOpen` 返回 `write_failed`。
+- 找不到安全的临时目录位置时，sidecar 仍然能解析邮件、保存附件，只有 `attachment.extractForOpen` 返回 `write_failed`。
 
 ## 8. 给调用方（Rust 端）的建议
 
@@ -378,7 +394,7 @@ this is not json
 - **请求超时**（建议值，由调用方实现）：`system.ping` 5 秒；`email.open`、`email.openNested` 30 秒；`document.close` 5 秒；`attachment.save`、`attachment.extractForOpen` 60 秒；`attachment.saveAll` 120 秒。超过超时就认为 sidecar 卡住，结束进程；所有进行中的请求按失败返回，下次请求时重新启动，并且丢掉所有旧的 `docId`。
 - **进程退出**：sidecar 意外退出（崩溃）时，所有进行中的请求都应以失败返回，下次请求时自动重启。畸形文件让解析器崩溃只会影响 sidecar，不会拖垮界面。
 - **路径**：`email.open` 的 `path` 只来自 Rust 弹出的对话框、拖放事件或启动参数；`targetPath`、`targetDir` 是 Rust 弹出保存对话框得到的绝对路径。前端传来的路径不要直接转发。
-- **正常关闭**：关闭 sidecar 的 stdin，然后等待进程退出（它需要清理临时目录）；等不到再强行结束。
+- **正常关闭**：关闭 sidecar 的 stdin，然后等待进程退出（它需要清理临时目录）；sidecar 在 stdin 关闭后最多约 2.5 秒就会退出（见“1. 启动与退出”），所以等 5 秒还不退出再强行结束就够了。
 - **`internal_error`**：表示 sidecar 有 bug，可以提示用户“处理失败”，并把 stderr 的内容记录下来。
 
 ## 9. 平台差异

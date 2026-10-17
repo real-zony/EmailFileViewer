@@ -46,6 +46,7 @@ internal static class MsgEmailMapper
         var attachments = listed.ToDictionary(source => source.Id);
         var resources = new List<IDisposable>();
         var hasRemoteContent = body.HasRemoteContent;
+        var innerEncrypted = false;
 
         // 明文签名的 MSG 把整封 multipart/signed 邮件放在 smime.p7m 里，正文和附件都在里面
         if (smime == MsgSmimeKind.ClearSigned && body.Body.SourceFormat == BodyFormat.None && TryLoadClearSignedContent(message) is { } inner)
@@ -54,6 +55,7 @@ internal static class MsgEmailMapper
             var innerMapped = MimeEmailMapper.Map(inner);
             body = new BuiltBody(innerMapped.Document.Body, innerMapped.Document.HasRemoteContent);
             hasRemoteContent = innerMapped.Document.HasRemoteContent;
+            innerEncrypted = innerMapped.Document.IsEncrypted;
             listed.AddRange(innerMapped.Attachments.Values);
             foreach (var (id, source) in innerMapped.Attachments)
             {
@@ -62,6 +64,9 @@ internal static class MsgEmailMapper
         }
 
         var (isSigned, isEncrypted) = GetSmimeFlags(message, smime);
+
+        // 明文签名里被签名的内容本身是加密数据：同时是已签名和已加密
+        isEncrypted |= innerEncrypted;
 
         // 不透明签名的 MSG 把正文和附件包在 smime.p7m 的 CMS 数据里，取出来当作邮件内容映射；取不出来就只有邮件头和签名标志
         if (isSigned && smime == MsgSmimeKind.OpaqueOrEncrypted && TryLoadOpaqueSignedContent(message) is { } signedEntity)
@@ -118,7 +123,7 @@ internal static class MsgEmailMapper
         try
         {
             using var stream = new MemoryStream(data);
-            return MimeMessage.Load(stream);
+            return MimeMessage.Load(MimeParserOptions.Create(), stream);
         }
         catch (Exception ex) when (ex is FormatException or IOException)
         {

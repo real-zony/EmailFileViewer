@@ -21,14 +21,17 @@ internal sealed record StdioOptions
 
     /// <summary>判断路径上是否已有文件或目录；<c>null</c> 时查文件系统（测试里用来模拟取名之后被抢先创建同名文件）。</summary>
     internal Func<string, bool>? PathExists { get; init; }
+
+    /// <summary>输入结束后给进行中的请求的宽限时间；<c>null</c> 时是 2 秒（测试里用来缩短等待）。</summary>
+    internal TimeSpan? InputClosedGrace { get; init; }
 }
 
 /// <summary>
 /// <c>--stdio</c> 命令：作为 JSON 行协议的服务端运行，直到 stdin 结束。
 /// </summary>
 /// <remarks>
-/// 启动时创建本次会话的临时目录并清理其他会话留下的目录；stdin 读到结尾后，先处理完已收到的请求，
-/// 再关闭所有文档、删除本次会话的临时目录，然后正常退出。
+/// 启动时创建本次会话的临时目录并清理其他会话留下的目录；stdin 读到结尾后，给已收到的请求一小段时间处理完，
+/// 仍没完成的请求被取消，然后关闭所有文档、删除本次会话的临时目录，正常退出。
 /// </remarks>
 internal static class StdioCommand
 {
@@ -57,7 +60,7 @@ internal static class StdioCommand
             var methods = new SidecarMethods(registry, session, new AttachmentFiles(options?.PathExists)).CreateTable();
             options?.ConfigureMethods?.Invoke(methods);
 
-            var host = new ProtocolHost(methods, registry.Find, TextWriter.Synchronized(error), options?.MaxConcurrency);
+            var host = new ProtocolHost(methods, registry.Find, TextWriter.Synchronized(error), options?.MaxConcurrency, options?.InputClosedGrace);
             return await host.RunAsync(input, output, cancellationToken);
         }
         finally

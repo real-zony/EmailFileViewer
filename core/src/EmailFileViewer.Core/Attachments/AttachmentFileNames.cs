@@ -41,8 +41,14 @@ public static class AttachmentFileNames
         // Windows
         ".exe", ".bat", ".cmd", ".com", ".msi", ".ps1", ".vbs", ".js", ".jse", ".wsf", ".scr", ".lnk", ".hta", ".cpl",
 
+        // Windows：帮助文件、可远程取内容的配置、脚本组件、安装信息和补丁
+        ".chm", ".appref-ms", ".diagcab", ".settingcontent-ms", ".library-ms", ".search-ms", ".wsc", ".sct", ".inf", ".msp",
+
         // macOS
         ".app", ".command", ".pkg",
+
+        // macOS：磁盘映像，以及双击就会执行命令或打开远程地址的文件
+        ".dmg", ".terminal", ".fileloc", ".inetloc", ".webloc",
 
         // Linux
         ".sh", ".desktop", ".appimage", ".run",

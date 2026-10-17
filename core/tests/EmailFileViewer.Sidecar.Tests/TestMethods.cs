@@ -97,6 +97,34 @@ internal sealed class TestMethods
             return new TestResult(2);
         });
 
+        // 一直等到被取消（最多 30 秒）：用来检查输入结束后进行中的请求会被取消
+        table.Add("test.wait", plainParams, result, async (_, cancellationToken) =>
+        {
+            Record("wait started");
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Record("wait canceled");
+                throw;
+            }
+
+            return new TestResult(30);
+        });
+
+        // 不理会取消，一直占着（模拟无法中断的解析）：最多 15 秒
+        table.Add("test.block", plainParams, result, (_, _) =>
+        {
+            Record("block started");
+            return Task.Run(() =>
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(15));
+                return new TestResult(15);
+            });
+        });
+
         table.Add("test.rendezvous.document", documentParams, result, async (_, cancellationToken) =>
         {
             if (Interlocked.Increment(ref _rendezvous) == 2)

@@ -222,6 +222,85 @@ public class SaveAllTests
 
     [Fact]
     [Trait("Task", "4.3")]
+    public async Task SaveAll_WhileAnAttachmentIsBeingWritten_TheFinalNameDoesNotExistYet()
+    {
+        using var temp = new EmailFileViewer.Core.Tests.TempDirectory();
+        var files = new AttachmentFiles();
+        string[] namesWhileWriting = [];
+        bool finalNameExistedWhileWriting = true;
+
+        // 写到一半时（相当于此刻进程被强行结束）：最终名字的文件不能存在，只能有以 .efv- 开头的临时文件
+        var result = await files.SaveAllAsync(
+            temp.DirectoryPath,
+            [new EmailAttachment("1", "report.pdf", 12, "application/pdf", false)],
+            async (_, stream, token) =>
+            {
+                await stream.WriteAsync("first half, "u8.ToArray(), token);
+                await stream.FlushAsync(token);
+                namesWhileWriting = Samples.EntryNames(temp.DirectoryPath);
+                finalNameExistedWhileWriting = File.Exists(Path.Combine(temp.DirectoryPath, "report.pdf"));
+                await stream.WriteAsync("second half"u8.ToArray(), token);
+            });
+
+        Assert.False(finalNameExistedWhileWriting);
+        var temporary = Assert.Single(namesWhileWriting);
+        Assert.StartsWith(".efv-", temporary);
+        Assert.EndsWith(".tmp", temporary);
+
+        Assert.Empty(result.Failed);
+        Assert.Equal(["report.pdf"], Samples.EntryNames(temp.DirectoryPath));
+        Assert.Equal("first half, second half", await File.ReadAllTextAsync(Path.Combine(temp.DirectoryPath, "report.pdf")));
+    }
+
+    [Fact]
+    [Trait("Task", "4.3")]
+    public async Task SaveAll_WhenCanceledHalfway_LeavesNeitherTheFinalFileNorATemporaryFile()
+    {
+        using var temp = new EmailFileViewer.Core.Tests.TempDirectory();
+        using var cancellation = new CancellationTokenSource();
+        var files = new AttachmentFiles();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => files.SaveAllAsync(
+            temp.DirectoryPath,
+            [new EmailAttachment("1", "report.pdf", 12, "application/pdf", false), new EmailAttachment("2", "photo.jpg", 12, "image/jpeg", false)],
+            async (_, stream, token) =>
+            {
+                await stream.WriteAsync("some content"u8.ToArray(), token);
+                await cancellation.CancelAsync();
+                token.ThrowIfCancellationRequested();
+            },
+            cancellation.Token));
+
+        Assert.Empty(Samples.EntryNames(temp.DirectoryPath));
+    }
+
+    [Fact]
+    [Trait("Task", "4.3")]
+    public async Task SaveAll_ExistingFilesAreNeverOverwritten_EvenWhenTheNameWasTakenWhileWriting()
+    {
+        using var temp = new EmailFileViewer.Core.Tests.TempDirectory();
+        var files = new AttachmentFiles();
+        var target = Path.Combine(temp.DirectoryPath, "a.txt");
+
+        // 写入期间别的程序在最终名字上创建了文件：改名时发现被占用，重新取名，对方的文件原样保留
+        var result = await files.SaveAllAsync(
+            temp.DirectoryPath,
+            [new EmailAttachment("1", "a.txt", 3, "text/plain", false)],
+            async (_, stream, token) =>
+            {
+                await File.WriteAllTextAsync(target, "SOMEONE ELSE", token);
+                await stream.WriteAsync("new"u8.ToArray(), token);
+            });
+
+        Assert.Empty(result.Failed);
+        Assert.Equal(Path.Combine(temp.DirectoryPath, "a (1).txt"), Assert.Single(result.Saved).Path);
+        Assert.Equal("SOMEONE ELSE", await File.ReadAllTextAsync(target));
+        Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(temp.DirectoryPath, "a (1).txt")));
+        Assert.Equal(["a (1).txt", "a.txt"], Samples.EntryNames(temp.DirectoryPath));
+    }
+
+    [Fact]
+    [Trait("Task", "4.3")]
     public async Task Save_WhenWritingFailsHalfway_TheExistingTargetIsUntouchedAndNoTemporaryFileRemains()
     {
         using var temp = new EmailFileViewer.Core.Tests.TempDirectory();

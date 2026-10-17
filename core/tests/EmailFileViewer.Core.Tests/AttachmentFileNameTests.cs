@@ -353,6 +353,46 @@ public class AttachmentFileNameTests
     }
 
     [Theory]
+    [InlineData("help.chm")]
+    [InlineData("tool.appref-ms")]
+    [InlineData("report.diagcab")]
+    [InlineData("page.settingcontent-ms")]
+    [InlineData("docs.library-ms")]
+    [InlineData("query.search-ms")]
+    [InlineData("component.wsc")]
+    [InlineData("component.sct")]
+    [InlineData("setup.inf")]
+    [InlineData("update.msp")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开可执行附件（Windows 补充类型）")]
+    public void IsExecutable_WindowsSupplementaryExtensions(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
+    [InlineData("installer.dmg")]
+    [InlineData("shell.terminal")]
+    [InlineData("link.fileloc")]
+    [InlineData("link.inetloc")]
+    [InlineData("link.webloc")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 打开可执行附件（macOS 补充类型）")]
+    public void IsExecutable_MacOsSupplementaryExtensions(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
+    [InlineData("help.chm.")]
+    [InlineData("help.CHM ")]
+    [InlineData("shell.terminal. .")]
+    [InlineData("setup.inf \u202E")]
+    [Trait("Scenario", "email-attachments / 用系统默认程序打开附件 / 结尾的点和空格不能绕过判断")]
+    public void IsExecutable_TrailingDotsAndSpacesDoNotBypass(string fileName)
+    {
+        Assert.True(AttachmentFileNames.IsExecutable(fileName));
+    }
+
+    [Theory]
     [InlineData("SETUP.EXE")]
     [InlineData("Setup.Exe")]
     [InlineData("INSTALL.SH")]

@@ -51,7 +51,7 @@ internal static class SignedContent
             }
 
             using var stream = new MemoryStream(contentInfo.Content);
-            return MimeEntity.Load(stream);
+            return MimeEntity.Load(MimeParserOptions.Create(), stream);
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {

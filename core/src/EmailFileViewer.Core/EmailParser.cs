@@ -133,7 +133,7 @@ public static class EmailParser
         var succeeded = false;
         try
         {
-            message = await MimeMessage.LoadAsync(stream, cancellationToken);
+            message = await MimeMessage.LoadAsync(MimeParserOptions.Create(), stream, cancellationToken);
             EmailFormatDetector.EnsureHasCommonHeader(message);
 
             // 邮件头里直接写了 8 位字节（没有 RFC 2047 编码）而且不是 UTF-8 时，用正文声明的字符集或识别出的字符集重新解析
@@ -144,9 +144,7 @@ public static class EmailParser
                 message = null;
                 stream.Position = startOffset;
 
-                var options = ParserOptions.Default.Clone();
-                options.CharsetEncoding = headerEncoding;
-                message = await MimeMessage.LoadAsync(options, stream, cancellationToken);
+                message = await MimeMessage.LoadAsync(MimeParserOptions.Create(headerEncoding), stream, cancellationToken);
             }
 
             var parsed = new ParsedEmail(MimeEmailMapper.Map(message), message, msgMessage: null, msgStream: null);

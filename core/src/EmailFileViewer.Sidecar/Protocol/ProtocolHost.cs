@@ -18,10 +18,22 @@ internal sealed class ProtocolHost
 {
     private const int ReadBufferSize = 64 * 1024;
 
+    /// <summary>
+    /// 输入结束（stdin 关闭）后，给进行中的请求正常完成的宽限时间。2 秒足够处理完刚发出的普通请求；
+    /// 超过的多半是很大或很畸形的文件，应用都在退出了，没必要再等。
+    /// </summary>
+    internal static readonly TimeSpan DefaultInputClosedGrace = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// 取消进行中的请求之后，再等它们收尾的最长时间。解析邮件里有无法中断的计算，所以到时间仍没结束就不再等。
+    /// </summary>
+    internal static readonly TimeSpan CancellationUnwindTimeout = TimeSpan.FromMilliseconds(500);
+
     private readonly MethodTable _methods;
     private readonly Func<string, DocumentEntry?> _findDocument;
     private readonly TextWriter _diagnostics;
     private readonly SemaphoreSlim _concurrency;
+    private readonly TimeSpan _inputClosedGrace;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly object _pendingLock = new();
     private readonly HashSet<Task> _pending = [];
@@ -37,8 +49,15 @@ internal sealed class ProtocolHost
     /// <param name="findDocument">按 <c>docId</c> 找文档，用来把针对同一个文档的请求排进它的队列。</param>
     /// <param name="diagnostics">诊断日志的输出，只在发生未预期的异常时写入。</param>
     /// <param name="maxConcurrency">同时处理的请求个数上限；<c>null</c> 时按处理器个数（2 到 8）。</param>
-    internal ProtocolHost(MethodTable methods, Func<string, DocumentEntry?> findDocument, TextWriter diagnostics, int? maxConcurrency = null)
+    /// <param name="inputClosedGrace">输入结束后给进行中的请求的宽限时间；<c>null</c> 时用 <see cref="DefaultInputClosedGrace"/>（测试里用来缩短等待）。</param>
+    internal ProtocolHost(
+        MethodTable methods,
+        Func<string, DocumentEntry?> findDocument,
+        TextWriter diagnostics,
+        int? maxConcurrency = null,
+        TimeSpan? inputClosedGrace = null)
     {
+        _inputClosedGrace = inputClosedGrace ?? DefaultInputClosedGrace;
         _methods = methods;
         _findDocument = findDocument;
         _diagnostics = diagnostics;
@@ -49,7 +68,9 @@ internal sealed class ProtocolHost
     /// 处理请求，直到输入结束或被取消。
     /// </summary>
     /// <remarks>
-    /// 输入读到结尾（EOF）后，先等已经收到的请求全部处理完并写出响应，再返回。被取消时，进行中的请求也会被取消。
+    /// 输入读到结尾（EOF）后，给已经收到的请求最多 <see cref="DefaultInputClosedGrace"/> 的时间处理完并写出响应；
+    /// 到时间还没完成的请求被取消（不再有响应），再等最多 <see cref="CancellationUnwindTimeout"/> 让它们收尾，然后返回。
+    /// 被取消时，进行中的请求也会被取消，同样只再等 <see cref="CancellationUnwindTimeout"/>。
     /// </remarks>
     /// <param name="input">请求输入，每行一个 JSON，UTF-8。</param>
     /// <param name="output">响应输出，每行一个 JSON，UTF-8，不带 BOM。</param>
@@ -87,8 +108,13 @@ internal sealed class ProtocolHost
             // 输入管道出错，按输入结束处理
         }
 
-        await DrainAsync();
-        _stop.Dispose();
+        var drainedCompletely = await DrainAsync(inputClosed: !canceled);
+
+        // 有请求没有收尾（被丢下继续跑）时不释放取消源，它们之后还会用到
+        if (drainedCompletely)
+        {
+            _stop.Dispose();
+        }
 
         if (_outputBroken)
         {
@@ -281,7 +307,33 @@ internal sealed class ProtocolHost
             TaskScheduler.Default);
     }
 
-    private async Task DrainAsync()
+    // 等进行中的请求结束。输入正常结束时先给宽限时间，到时间还没完成就取消它们；被取消的情况下直接取消。
+    // 返回是否全部结束；超过时间限制的请求不再等待，进程退出时一并终止
+    private async Task<bool> DrainAsync(bool inputClosed)
+    {
+        var all = DrainAllAsync();
+
+        if (inputClosed && !_stop.IsCancellationRequested)
+        {
+            if (await Task.WhenAny(all, Task.Delay(_inputClosedGrace)) == all)
+            {
+                await all;
+                return true;
+            }
+
+            await _stop.CancelAsync();
+        }
+
+        if (await Task.WhenAny(all, Task.Delay(CancellationUnwindTimeout)) == all)
+        {
+            await all;
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task DrainAllAsync()
     {
         while (true)
         {

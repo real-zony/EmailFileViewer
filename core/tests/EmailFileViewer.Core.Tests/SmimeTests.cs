@@ -213,4 +213,136 @@ public class SmimeTests
         Assert.Equal(MsgReader.Outlook.MessageType.Email, parsed.MsgMessage!.Type);
         Assert.Equal(before, await File.ReadAllBytesAsync(path));
     }
+
+    // ---- 签名里包着加密 ----
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 加密与签名邮件提示 / 签名里包着加密的邮件同时标记为已签名和已加密")]
+    public async Task MultipartSignedWrappingEncryptedData_IsMarkedSignedAndEncrypted_WithoutListingTheCarrier()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteMail(
+            "signed-encrypted.eml",
+            """
+            From: a@example.com
+            To: b@example.com
+            Subject: signed then encrypted
+            MIME-Version: 1.0
+            Content-Type: multipart/signed; protocol="application/pkcs7-signature"; micalg=sha-256; boundary="s"
+
+            --s
+            Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name=smime.p7m
+            Content-Transfer-Encoding: base64
+
+            AAECAwQFBgcICQoLDA0ODw==
+            --s
+            Content-Type: application/pkcs7-signature; name=smime.p7s
+            Content-Transfer-Encoding: base64
+
+            AAECAwQFBgcICQoLDA0ODw==
+            --s--
+            """);
+
+        using var parsed = await EmailParser.ParseFileAsync(path);
+        var document = parsed.Document;
+
+        Assert.True(document.IsSigned);
+        Assert.True(document.IsEncrypted);
+        Assert.Equal(BodyFormat.None, document.Body.SourceFormat);
+        Assert.Null(document.Body.Html);
+        Assert.Equal("signed then encrypted", document.Subject);
+        Assert.Empty(document.Attachments);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 加密与签名邮件提示 / 明文签名的内容是普通邮件时仍然只标记为已签名")]
+    public async Task MultipartSignedWithOrdinaryContent_IsStillOnlySigned()
+    {
+        using var parsed = await MailAssert.ParseSampleAsync("smime-signed.eml");
+
+        Assert.True(parsed.Document.IsSigned);
+        Assert.False(parsed.Document.IsEncrypted);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 加密与签名邮件提示 / 不透明签名里包着加密的邮件同时标记为已签名和已加密")]
+    public async Task OpaqueSignedWrappingEncryptedData_IsMarkedSignedAndEncrypted_WithoutListingTheCarrier()
+    {
+        using var temp = new TempDirectory();
+        var encrypted = TestCms.Pkcs7Entity("enveloped-data", [0, 1, 2, 3, 4, 5, 6, 7]);
+        var path = TestCms.WriteSignedMail(temp, TestCms.SignEntity(encrypted));
+
+        using var parsed = await EmailParser.ParseFileAsync(path);
+
+        Assert.True(parsed.Document.IsSigned);
+        Assert.True(parsed.Document.IsEncrypted);
+        Assert.Equal(BodyFormat.None, parsed.Document.Body.SourceFormat);
+        Assert.Empty(parsed.Document.Attachments);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 加密与签名邮件提示 / 明文签名里又包着不透明签名时取出里面的正文")]
+    public async Task MultipartSignedWrappingOpaqueSignedData_ShowsTheInnerBody()
+    {
+        using var temp = new TempDirectory();
+        var inner = TestCms.SignEntity("Content-Type: text/plain; charset=utf-8\n\nINNER-SIGNED-BODY\n");
+        var path = temp.WriteMail(
+            "signed-signed.eml",
+            $"""
+            From: a@example.com
+            To: b@example.com
+            Subject: double signed
+            MIME-Version: 1.0
+            Content-Type: multipart/signed; protocol="application/pkcs7-signature"; micalg=sha-256; boundary="s"
+
+            --s
+            {TestCms.Pkcs7Entity("signed-data", inner).ReplaceLineEndings("\n")}
+            --s
+            Content-Type: application/pkcs7-signature; name=smime.p7s
+            Content-Transfer-Encoding: base64
+
+            AAECAwQFBgcICQoLDA0ODw==
+            --s--
+            """);
+
+        using var parsed = await EmailParser.ParseFileAsync(path);
+
+        Assert.True(parsed.Document.IsSigned);
+        Assert.False(parsed.Document.IsEncrypted);
+        Assert.Contains("INNER-SIGNED-BODY", MailAssert.PlainTextOf(parsed.Document));
+        Assert.Empty(parsed.Document.Attachments);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 加密与签名邮件提示 / MSG 明文签名里包着加密的内容同时标记为已签名和已加密")]
+    public async Task MsgClearSignedWrappingEncryptedData_IsMarkedSignedAndEncrypted_WithoutListingTheCarrier()
+    {
+        // 用样本 MSG 做模板，把 smime.p7m 的内容换成“被签名的内容是加密数据”的 multipart/signed 邮件
+        var inner = (
+            "From: a@example.com\r\nTo: b@example.com\r\nSubject: signed then encrypted\r\nMIME-Version: 1.0\r\n"
+            + "Content-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; micalg=sha-256; boundary=\"s\"\r\n\r\n"
+            + "--s\r\nContent-Type: application/pkcs7-mime; smime-type=enveloped-data; name=smime.p7m\r\nContent-Transfer-Encoding: base64\r\n\r\nAAECAwQFBgcICQoLDA0ODw==\r\n"
+            + "--s\r\nContent-Type: application/pkcs7-signature; name=smime.p7s\r\nContent-Transfer-Encoding: base64\r\n\r\nAAECAwQFBgcICQoLDA0ODw==\r\n"
+            + "--s--\r\n").Select(c => (byte)c).ToArray();
+
+        var buffer = new MemoryStream(File.ReadAllBytes(SampleFiles.GetPath("smime-msg-signed-clear.msg")));
+        using (var root = OpenMcdf.RootStorage.Open(buffer, OpenMcdf.StorageModeFlags.LeaveOpen))
+        {
+            using var carrier = root.OpenStorage("__attach_version1.0_#00000000").OpenStream("__substg1.0_37010102");
+            carrier.SetLength(inner.Length);
+            carrier.Position = 0;
+            carrier.Write(inner);
+        }
+
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("signed-encrypted.msg", buffer.ToArray());
+
+        using var parsed = await EmailParser.ParseFileAsync(path);
+
+        Assert.True(parsed.Document.IsSigned);
+        Assert.True(parsed.Document.IsEncrypted);
+        Assert.Equal(BodyFormat.None, parsed.Document.Body.SourceFormat);
+        Assert.DoesNotContain(parsed.Document.Attachments, attachment => string.Equals(attachment.FileName, "smime.p7m", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(parsed.Document.Attachments);
+    }
 }

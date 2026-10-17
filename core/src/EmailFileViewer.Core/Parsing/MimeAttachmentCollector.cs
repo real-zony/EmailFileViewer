@@ -11,7 +11,7 @@ namespace EmailFileViewer.Core.Parsing;
 /// 子 multipart 的成员是 <c>2.1</c>；顶层是单个部分时 Id 为 <c>1</c>。winmail.dat 里解出的第 k 个文件是 <c>{winmail.dat 的 Id}.t{k}</c>。
 /// 同一个文件每次解析得到的 Id 都一样。</para>
 /// <para>不列出的部分：正文文本、multipart/signed 的签名部分、承载 S/MIME 内容的 pkcs7-mime、winmail.dat 本身（解出了文件时）。
-/// 没有文件名也不是附件的文本部分（例如 multipart/alternative 里的另一种正文）不算附件。</para>
+/// winmail.dat 解不出任何文件时仍然列出它本身。没有文件名也不是附件的文本部分（例如 multipart/alternative 里的另一种正文）不算附件。</para>
 /// </remarks>
 internal sealed class MimeAttachmentCollector
 {
@@ -127,7 +127,7 @@ internal sealed class MimeAttachmentCollector
         return part.ContentDisposition?.IsAttachment == true || !string.IsNullOrWhiteSpace(part.FileName);
     }
 
-    // 展开 winmail.dat：只要有文件名的成员（TNEF 里的正文会作为没有文件名的文本部分一起返回）。解不开就当普通附件
+    // 展开 winmail.dat：只要有文件名的成员（TNEF 里的正文会作为没有文件名的文本部分一起返回）。解不开、或者解不出任何文件，就当普通附件
     private void AddTnef(TnefPart tnef, string path)
     {
         List<MimeEntity> extracted;
@@ -148,12 +148,19 @@ internal sealed class MimeAttachmentCollector
             return;
         }
 
+        var listedCount = _sources.Count;
         for (var i = 0; i < extracted.Count; i++)
         {
             if (extracted[i] is MimePart { FileName: not null } member)
             {
                 _sources.Add(MimePartAttachment.Create($"{path}.t{i}", member));
             }
+        }
+
+        // 一个文件也没解出来（只有正文，或内容损坏）：保留 winmail.dat 本身，用户至少可以保存它
+        if (_sources.Count == listedCount)
+        {
+            _sources.Add(MimePartAttachment.Create(path, tnef));
         }
     }
 }

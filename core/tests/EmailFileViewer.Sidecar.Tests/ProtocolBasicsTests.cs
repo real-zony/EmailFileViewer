@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -251,6 +252,68 @@ public class ProtocolBasicsTests
         Assert.Equal(0, code);
         var response = JsonNode.Parse(Assert.Single(session.Lines))!.AsObject();
         Assert.Equal("Autumn Sale: up to 40% off", (string)SidecarSession.Result(response)["document"]!["subject"]!);
+    }
+
+    [Fact]
+    [Trait("Task", "4.1")]
+    public void EndOfInput_GivesInFlightRequestsTwoSecondsOfGrace()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(2), ProtocolHost.DefaultInputClosedGrace);
+        Assert.True(ProtocolHost.CancellationUnwindTimeout <= TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    [Trait("Task", "4.1")]
+    public async Task EndOfInput_CancelsRequestsStillRunningAfterTheGracePeriod_AndExitsWithZero()
+    {
+        var methods = new TestMethods();
+        await using var session = SidecarSession.Start(new StdioOptions { ConfigureMethods = methods.Register, InputClosedGrace = TimeSpan.FromMilliseconds(300) });
+
+        // 一个要等 30 秒的请求，发出后立刻关闭输入：不能等它做完
+        await session.SendRawAsync("""{"id":1,"method":"test.wait"}""");
+        Eventually.IsTrue(() => methods.Events.Contains("wait started"), "请求应该已经开始执行");
+        var stopwatch = Stopwatch.StartNew();
+        var code = await session.CompleteAsync();
+
+        Assert.Equal(0, code);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"关闭输入后用了 {stopwatch.Elapsed.TotalSeconds:F1} 秒才退出");
+        Assert.Contains("wait canceled", methods.Events);
+        Assert.Empty(session.Lines);
+    }
+
+    [Fact]
+    [Trait("Task", "4.1")]
+    public async Task EndOfInput_DoesNotWaitForARequestThatIgnoresCancellation()
+    {
+        var methods = new TestMethods();
+        await using var session = SidecarSession.Start(new StdioOptions { ConfigureMethods = methods.Register, InputClosedGrace = TimeSpan.FromMilliseconds(200) });
+
+        // 无法中断的请求（模拟畸形文件上的长时间解析）：宽限期过后取消、再等一小会儿，然后不管它直接退出
+        await session.SendRawAsync("""{"id":1,"method":"test.block"}""");
+        Eventually.IsTrue(() => methods.Events.Contains("block started"), "请求应该已经开始执行");
+        var stopwatch = Stopwatch.StartNew();
+        var code = await session.CompleteAsync();
+
+        Assert.Equal(0, code);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"关闭输入后用了 {stopwatch.Elapsed.TotalSeconds:F1} 秒才退出");
+        Eventually.HasNoSubdirectories(session.SessionRoot);
+    }
+
+    [Fact]
+    [Trait("Task", "4.1")]
+    public async Task EndOfInput_RequestsThatFinishWithinTheGracePeriod_AreStillAnswered()
+    {
+        var methods = new TestMethods();
+        await using var session = SidecarSession.Start(new StdioOptions { ConfigureMethods = methods.Register, InputClosedGrace = TimeSpan.FromSeconds(10) });
+        var (docId, _) = await Samples.OpenAsync(session, "headers-normal.eml");
+
+        // 慢一点但在宽限期内能完成的请求：关闭输入后仍然会得到响应
+        await session.SendRawAsync(new JsonObject { ["id"] = 99, ["method"] = "test.exclusive", ["params"] = new JsonObject { ["docId"] = docId, ["delayMilliseconds"] = 400 } }.ToJsonString());
+        var code = await session.CompleteAsync();
+
+        Assert.Equal(0, code);
+        var response = Assert.Single(session.Lines, line => JsonNode.Parse(line)!["id"]!.GetValue<int>() == 99);
+        Assert.Equal(400, (int)SidecarSession.Result(JsonNode.Parse(response)!.AsObject())["value"]!);
     }
 
     [Fact]

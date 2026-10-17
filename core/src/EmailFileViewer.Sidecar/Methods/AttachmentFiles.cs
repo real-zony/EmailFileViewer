@@ -68,9 +68,10 @@ internal sealed class AttachmentFiles
     /// 把全部附件保存到文件夹，不覆盖任何已有文件。
     /// </summary>
     /// <remarks>
-    /// 每个附件依次：清理文件名、遇到重名生成 <c>name (1).ext</c>、校验最终路径在文件夹内，用 <see cref="FileMode.CreateNew"/> 创建文件。
-    /// 取名到创建之间别的进程抢先创建了同名文件时，创建会失败，这时重新取名。单个附件失败（例如写入出错）记入失败列表，不影响其他附件，
-    /// 失败附件留下的残缺文件会删掉；整个请求被取消时直接中止。
+    /// 每个附件依次：清理文件名、先写进同一文件夹里的临时文件，写完（落盘）再用不覆盖的方式改成最终名字。遇到重名生成 <c>name (1).ext</c>，
+    /// 并校验最终路径在文件夹内。取名到改名之间别的进程抢先创建了同名文件时，改名会失败，这时重新取名。
+    /// 这样即使进程在写入过程中被强行结束，文件夹里也只会留下一个 <c>.efv-*.tmp</c> 临时文件，不会出现名字正确但内容残缺的附件。
+    /// 单个附件失败（例如写入出错）记入失败列表，不影响其他附件，临时文件会删掉；整个请求被取消时直接中止。
     /// </remarks>
     /// <param name="directory">目标文件夹，必须已经存在。</param>
     /// <param name="attachments">要保存的附件。</param>
@@ -91,7 +92,7 @@ internal sealed class AttachmentFiles
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var path = await CreateUniqueFileAsync(
+                var path = await WriteUniqueFileAsync(
                     directory,
                     AttachmentFileNames.Sanitize(attachment.FileName),
                     (stream, token) => writeAsync(attachment.Id, stream, token),
@@ -121,34 +122,7 @@ internal sealed class AttachmentFiles
     /// <returns>提取出的文件的完整路径。</returns>
     internal async Task<string> ExtractAsync(string directory, string? fileName, Func<Stream, CancellationToken, Task> writeAsync, CancellationToken cancellationToken = default)
     {
-        var name = AttachmentFileNames.Sanitize(fileName);
-        var tempPath = Path.Combine(directory, TempFileName());
-
-        try
-        {
-            await WriteNewFileAsync(tempPath, writeAsync, cancellationToken);
-
-            for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
-            {
-                var path = ChooseUniquePath(directory, name);
-                try
-                {
-                    await MoveAsync(tempPath, path, overwrite: false, cancellationToken);
-                    return path;
-                }
-                catch (IOException) when (_pathExists(path))
-                {
-                    // 取名之后同名文件被别人抢先创建了：重新取名
-                }
-            }
-
-            throw new IOException($"无法为 \"{name}\" 找到没有被占用的名字。");
-        }
-        catch
-        {
-            TryDelete(tempPath);
-            throw;
-        }
+        return await WriteUniqueFileAsync(directory, AttachmentFileNames.Sanitize(fileName), writeAsync, cancellationToken);
     }
 
     /// <summary>
@@ -173,44 +147,40 @@ internal sealed class AttachmentFiles
         return exception is IOException or UnauthorizedAccessException or NotSupportedException or System.Security.SecurityException or ArgumentException;
     }
 
-    private async Task<string> CreateUniqueFileAsync(
+    // 先写临时文件，再以不覆盖的方式改成最终名字；目标名字已被占用就重新取名。任何失败都会删掉临时文件
+    private async Task<string> WriteUniqueFileAsync(
         string directory,
         string name,
         Func<Stream, CancellationToken, Task> writeAsync,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
+        var tempPath = Path.Combine(directory, TempFileName());
+
+        try
         {
-            var path = ChooseUniquePath(directory, name);
+            await WriteNewFileAsync(tempPath, writeAsync, cancellationToken);
 
-            FileStream stream;
-            try
+            for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
             {
-                stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, BufferSize, useAsync: true);
-            }
-            catch (IOException) when (File.Exists(path) || Directory.Exists(path))
-            {
-                // 取名之后同名文件被别人抢先创建了：重新取名，绝不覆盖
-                continue;
-            }
-
-            try
-            {
-                await using (stream)
+                var path = ChooseUniquePath(directory, name);
+                try
                 {
-                    await writeAsync(stream, cancellationToken);
+                    await MoveAsync(tempPath, path, overwrite: false, cancellationToken);
+                    return path;
                 }
+                catch (IOException) when (_pathExists(path))
+                {
+                    // 取名之后同名文件被别人抢先创建了：重新取名，绝不覆盖
+                }
+            }
 
-                return path;
-            }
-            catch
-            {
-                TryDelete(path);
-                throw;
-            }
+            throw new IOException($"无法为 \"{name}\" 找到没有被占用的名字。");
         }
-
-        throw new IOException($"无法为 \"{name}\" 找到没有被占用的名字。");
+        catch
+        {
+            TryDelete(tempPath);
+            throw;
+        }
     }
 
     private string ChooseUniquePath(string directory, string name)

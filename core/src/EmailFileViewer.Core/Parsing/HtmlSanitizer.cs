@@ -23,6 +23,13 @@ internal readonly record struct SanitizedHtml(string Html, bool HasRemoteContent
 /// </remarks>
 internal sealed partial class HtmlSanitizer
 {
+    /// <summary>
+    /// 清理后的正文 HTML 最多输出的字符数，超过就在当前位置截断，后面的内容丢弃。
+    /// 32 MiB = 内嵌图片的上限（<see cref="InlineResourceResolver.MaxInlineDataUriLength"/>，16 MiB）加上同样大小的标记和文字；
+    /// 真实邮件的 HTML 很少超过几 MB，这个值只用来挡住恶意构造的巨型正文。
+    /// </summary>
+    internal const int MaxOutputLength = 32 * 1024 * 1024;
+
     // 连同内容一起删除
     private static readonly HashSet<string> RemoveWithContent = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -58,16 +65,21 @@ internal sealed partial class HtmlSanitizer
     private static readonly HashSet<string> LoadingHrefElements = new(StringComparer.OrdinalIgnoreCase)
     {
         "link", "image", "use", "feimage", "mpath",
+
+        // SVG 里可以引用外部文档的渐变、图案、滤镜、文字路径和光标
+        "pattern", "lineargradient", "radialgradient", "filter", "textpath", "cursor",
     };
 
     private readonly InlineResourceResolver? _resolver;
     private readonly CssSanitizer _css;
+    private readonly int _maxOutputLength;
     private bool _hasRemoteContent;
 
-    private HtmlSanitizer(InlineResourceResolver? resolver)
+    private HtmlSanitizer(InlineResourceResolver? resolver, int maxOutputLength)
     {
         _resolver = resolver;
         _css = new CssSanitizer(resolver);
+        _maxOutputLength = maxOutputLength;
     }
 
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9_:.-]*$", RegexOptions.CultureInvariant)]
@@ -78,10 +90,11 @@ internal sealed partial class HtmlSanitizer
     /// </summary>
     /// <param name="html">邮件里的 HTML，可以是完整文档也可以是片段。</param>
     /// <param name="resolver">解析内嵌资源的对象；没有内嵌资源可用时为 <c>null</c>。</param>
+    /// <param name="maxOutputLength">输出的最大字符数，默认 <see cref="MaxOutputLength"/>（测试里用来缩小，免得构造巨型输入）。</param>
     /// <returns>清理后的 HTML，以及是否引用了远程资源。</returns>
-    internal static SanitizedHtml Sanitize(string html, InlineResourceResolver? resolver)
+    internal static SanitizedHtml Sanitize(string html, InlineResourceResolver? resolver, int maxOutputLength = MaxOutputLength)
     {
-        var sanitizer = new HtmlSanitizer(resolver);
+        var sanitizer = new HtmlSanitizer(resolver, maxOutputLength);
         var output = sanitizer.Run(html);
         return new SanitizedHtml(output, sanitizer._hasRemoteContent || sanitizer._css.HasRemoteContent);
     }
@@ -96,6 +109,12 @@ internal sealed partial class HtmlSanitizer
 
         while (tokenizer.ReadNextToken(out var token))
         {
+            // 超过长度上限：在这个位置截断，后面的内容不要了
+            if (builder.Length > _maxOutputLength)
+            {
+                break;
+            }
+
             if (skipUntilEndOf is not null)
             {
                 if (token is HtmlTagToken { IsEndTag: true } endTag && string.Equals(endTag.Name, skipUntilEndOf, StringComparison.OrdinalIgnoreCase))
@@ -174,7 +193,9 @@ internal sealed partial class HtmlSanitizer
 
         var attributes = SanitizeAttributes(name, tag);
 
-        if (name.Equals("style", StringComparison.OrdinalIgnoreCase) && !tag.IsEmptyElement)
+        // <style/> 在 HTML 里仍然是起始标签（斜杠被忽略），后面的文字是样式，所以和 <style> 一样处理，输出时也不保留斜杠
+        var isStyle = name.Equals("style", StringComparison.OrdinalIgnoreCase);
+        if (isStyle)
         {
             inStyle = true;
         }
@@ -191,7 +212,7 @@ internal sealed partial class HtmlSanitizer
             }
         }
 
-        builder.Append(tag.IsEmptyElement ? "/>" : ">");
+        builder.Append(tag.IsEmptyElement && !isStyle ? "/>" : ">");
     }
 
     // 样式表是原始文本，浏览器不会解码实体。先去掉 Outlook 常见的 <!-- --> 包装（CSS 里它们没有意义，留着还会让第一条规则失效），
@@ -293,6 +314,12 @@ internal sealed partial class HtmlSanitizer
         {
             ApplyLinkAttributes(result);
         }
+        else if (tagName.Equals("link", StringComparison.OrdinalIgnoreCase))
+        {
+            // 留下来的 link 只会是样式表。rel 里的其他取值（preconnect、dns-prefetch 等）会让浏览器在用户同意之前就发起连接，所以只写 stylesheet
+            result.RemoveAll(a => a.Name.Equals("rel", StringComparison.OrdinalIgnoreCase));
+            result.Add(("rel", "stylesheet"));
+        }
 
         return result;
     }
@@ -344,7 +371,16 @@ internal sealed partial class HtmlSanitizer
                 _hasRemoteContent = true;
                 return value;
             case UrlKind.Cid or UrlKind.Relative:
-                return _resolver?.TryResolve(value) ?? value;
+                if (_resolver is null)
+                {
+                    return value;
+                }
+
+                var dataUri = _resolver.TryResolve(value, out var overBudget);
+
+                // 内嵌图片的总量超出上限：这一处引用去掉，不再留着 cid: 地址
+                keep = !overBudget;
+                return dataUri ?? value;
             default:
                 return value;
         }
@@ -400,7 +436,7 @@ internal sealed partial class HtmlSanitizer
         return string.Join(", ", candidates);
     }
 
-    // 链接：在新窗口打开，不带来源信息，title 写成实际地址，这样悬停时不需要脚本也能看到真实地址
+    // 链接：在新窗口打开，不带来源信息，title 写成实际地址（去掉浏览器导航时会忽略的换行和制表符），这样悬停时不需要脚本也能看到真实地址
     private static void ApplyLinkAttributes(List<(string Name, string? Value)> attributes)
     {
         var href = attributes.FirstOrDefault(a => a.Name.Equals("href", StringComparison.OrdinalIgnoreCase)).Value;
@@ -414,6 +450,6 @@ internal sealed partial class HtmlSanitizer
             || a.Name.Equals("title", StringComparison.OrdinalIgnoreCase));
         attributes.Add(("target", "_blank"));
         attributes.Add(("rel", "noopener noreferrer"));
-        attributes.Add(("title", href));
+        attributes.Add(("title", UrlClassifier.Clean(href)));
     }
 }
