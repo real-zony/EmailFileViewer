@@ -14,7 +14,7 @@
 - 附件：列出附件，支持单个或全部保存，支持打开嵌套邮件（msg 内的 msg、eml 内的 `message/rfc822`）及 winmail.dat 中的附件。
 - 界面语言：默认英文，支持简体中文，跟随系统语言。
 - 外观：浅色、深色、跟随系统三种模式，加上 4–6 套预设配色；只改变应用界面，不改变邮件正文。
-- 分发：GitHub Actions 三平台矩阵构建，产出签名的安装包（macOS 签名并公证、Windows 签名、Linux 提供 AppImage 和 deb）。
+- 分发：GitHub Actions 三平台矩阵构建，产出签名的安装包（macOS 签名并公证、Windows 签名、Linux 提供 AppImage 和 deb）。Windows 另提供免安装的绿色版 zip，数据保存在程序目录下。
 
 不在本次范围：
 

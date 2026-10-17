@@ -277,6 +277,30 @@
 - **写入的完整性**："全部保存"先写临时文件，再以不覆盖的方式改名。stdin 关闭后，sidecar 会取消进行中的请求，宽限期结束后退出。
 - **未签名的 macOS 内测包**：没有证书时使用 ad-hoc 签名，测试者需要在"隐私与安全性"中点"仍要打开"。正式发布仍以 9.4 的 Developer ID 签名和公证为准。
 
+### D13. Windows 绿色版
+
+用户在开始 Windows 验收前提出这个需求。需要用户决定的点已经定下：数据放在 exe 旁边；系统中必须已有 WebView2，缺少时给出提示。
+
+- **形态**：`EmailFileViewer_<版本>_x64-portable.zip`，内容如下：
+  - 主程序 `EmailFileViewer.exe`
+  - sidecar `efv-sidecar.exe`（必须和主程序放在同一目录，现有的查找逻辑不需要改）
+  - 标记文件 `EmailFileViewer.portable`
+  - 一份简短的 `README.txt`
+  
+  绿色版和安装版用的是**同一份二进制**，不单独编译。
+- **怎样进入绿色模式**：启动时检查 exe 所在目录里有没有 `EmailFileViewer.portable`，有就进入绿色模式。安装版的目录里没有这个文件。
+- **数据目录**：
+  - 绿色模式下，`<exe 目录>\data\` 中存放 `settings.json`（store 插件）、`webview\`（WebView2 的用户数据目录，创建窗口时通过 data directory 指定）和 `logs\`。
+  - 启动时先确认 `data` 目录可写（建目录，再写入并删除一个探测文件）。不可写就退回安装版使用的标准目录，并记一条 warn 日志。
+  - 首屏前读取设置（D7）的逻辑改为从这个目录读。
+- **不碰系统**：
+  - 绿色模式不注册文件关联，也不写注册表。
+  - 用户自己在系统里用"打开方式"选择本程序，是系统的行为，不在我们的控制范围内。
+  - 打开附件产生的临时文件仍放在系统临时目录（D12），退出时清理。
+- **检测 WebView2**：创建窗口前查询 WebView2 运行时的版本（例如 `tauri::webview_version()`）。查不到就用 Windows 的原生消息框说明原因，并给出 `https://developer.microsoft.com/microsoft-edge/webview2/`，然后退出。这个检测对安装版同样有效，可以兜住"安装后 WebView2 被卸载"的情况。
+- **单实例**：绿色版和安装版的单实例都以 identifier 识别，两者同时运行时，后启动的会把文件转发给先启动的那个。这个情况可以接受，在 README 中说明即可。
+- **发布**：Windows 构建完成后，在 release.yml 中把主程序和 sidecar 打成 zip，上传到同一个草稿 Release，SHA256SUMS 随之覆盖到第 6 个文件。9.5 的签名必须覆盖 zip 里的两个 exe。
+
 ## Risks / Trade-offs
 
 - [MsgReader 或 MimeKit 不兼容 AOT] → 按 D3 退回自包含的 JIT 发布，并补上 macOS entitlements；把这个实验排在第一个任务。
