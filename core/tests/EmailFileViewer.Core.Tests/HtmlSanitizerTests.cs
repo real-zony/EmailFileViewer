@@ -217,7 +217,11 @@ public class HtmlSanitizerTests
     [InlineData("<a href=\"#a%20b?c=d/e:f\">t</a>", "<a href=\"about:srcdoc#a%20b?c=d/e:f\">t</a>")]
     [InlineData("<a href=\"  #x\t\">t</a>", "<a href=\"about:srcdoc#x\">t</a>")]
     [InlineData("<a class=\"c\" href=\"#x\" style=\"color:red\">t</a>", "<a class=\"c\" href=\"about:srcdoc#x\" style=\"color:red\">t</a>")]
-    [InlineData("<a href=\"#x\" target=\"_self\" title=\"mine\">t</a>", "<a href=\"about:srcdoc#x\" target=\"_self\" title=\"mine\">t</a>")]
+    // 页内跳转不能带 target：邮件里原有的 target="_blank" 会让点击变成打开新窗口，不再滚动
+    [InlineData("<a href=\"#x\" target=\"_self\" title=\"mine\">t</a>", "<a href=\"about:srcdoc#x\" title=\"mine\">t</a>")]
+    [InlineData("<a href=\"#x\" target=\"_blank\">t</a>", "<a href=\"about:srcdoc#x\">t</a>")]
+    [InlineData("<a TARGET=\"_top\" href=\"#x\">t</a>", "<a href=\"about:srcdoc#x\">t</a>")]
+    [InlineData("<map><area target=\"_blank\" href=\"#x\"></map>", "<map><area href=\"about:srcdoc#x\"></map>")]
     [InlineData("<map><area href=\"#x\" shape=\"rect\"></map>", "<map><area href=\"about:srcdoc#x\" shape=\"rect\"></map>")]
     [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 页内锚点链接的地址改写")]
     public void FragmentOnlyHref_IsRewrittenToTheSrcdocAddress(string html, string expected)
@@ -245,15 +249,32 @@ public class HtmlSanitizerTests
     }
 
     [Theory]
-    [InlineData("<a href=\"\">t</a>")]
-    [InlineData("<a href=\"  \">t</a>")]
     [InlineData("<a name=\"top\">t</a>")]
-    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 没有地址的链接保持原样")]
-    public void LinksWithoutAnAddress_AreUnchanged(string html)
+    [InlineData("<a>t</a>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 没有 href 的链接保持原样")]
+    public void LinksWithoutHref_AreUnchanged(string html)
     {
         var result = Run(html);
 
         Assert.Equal(html, result.Html);
+    }
+
+    [Theory]
+    [InlineData("<a href=\"\">t</a>", "<a>t</a>")]
+    [InlineData("<a href=\"  \">t</a>", "<a>t</a>")]
+    [InlineData("<a href=\"&#9;&#10; \">t</a>", "<a>t</a>")]
+    [InlineData("<a href>t</a>", "<a>t</a>")]
+    [InlineData("<a href=>t</a>", "<a>t</a>")]
+    [InlineData("<a class=\"c\" href=\"\" name=\"n\">t</a>", "<a class=\"c\" name=\"n\">t</a>")]
+    [InlineData("<a href=\"\" target=\"_blank\">t</a>", "<a target=\"_blank\">t</a>")]
+    [InlineData("<map><area href=\"\"></map>", "<map><area></map>")]
+    [InlineData("<map><area href=\" \" shape=\"rect\"></map>", "<map><area shape=\"rect\"></map>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 空地址的链接删掉 href，免得点击后 iframe 被导航到应用页面")]
+    public void EmptyHref_IsRemoved(string html, string expected)
+    {
+        var result = Run(html);
+
+        Assert.Equal(expected, result.Html);
     }
 
     [Theory]

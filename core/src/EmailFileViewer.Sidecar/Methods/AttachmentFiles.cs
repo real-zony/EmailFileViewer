@@ -25,14 +25,21 @@ internal sealed class AttachmentFiles
     private const int FirstMoveRetryDelayMilliseconds = 20;
 
     private readonly Func<string, bool> _pathExists;
+    private readonly NoReplaceMover _mover;
+    private readonly TextWriter _diagnostics;
+    private int _warnedAboutNonAtomicMove;
 
     /// <summary>
     /// 创建。
     /// </summary>
     /// <param name="pathExists">判断路径上是否已有文件或目录；默认查文件系统，测试里用来模拟“取名之后别人抢先创建了同名文件”。</param>
-    internal AttachmentFiles(Func<string, bool>? pathExists = null)
+    /// <param name="mover">Unix 上原子的“不覆盖改名”；默认用系统调用，测试里用来模拟系统不支持。</param>
+    /// <param name="diagnostics">诊断日志的输出（进程里是 stderr）；默认丢弃。</param>
+    internal AttachmentFiles(Func<string, bool>? pathExists = null, NoReplaceMover? mover = null, TextWriter? diagnostics = null)
     {
         _pathExists = pathExists ?? (path => File.Exists(path) || Directory.Exists(path));
+        _mover = mover ?? new NoReplaceMover();
+        _diagnostics = diagnostics ?? TextWriter.Null;
     }
 
     /// <summary>
@@ -189,9 +196,24 @@ internal sealed class AttachmentFiles
         return AttachmentPaths.CombineInsideDirectory(directory, uniqueName);
     }
 
-    // 改名。Windows 上遇到可能是暂时的失败（文件正在使用、拒绝访问）时短暂等待后重试；其他平台和明确不会好转的失败直接抛出
-    private static async Task MoveAsync(string source, string destination, bool overwrite, CancellationToken cancellationToken)
+    // 改名。Windows 上遇到可能是暂时的失败（文件正在使用、拒绝访问）时短暂等待后重试；其他平台和明确不会好转的失败直接抛出。
+    // Unix 上“不覆盖”的改名用内核的原子操作（见 NoReplaceMover）：File.Move 在 Unix 上是先检查再 rename，两步之间同名文件可能被抢先创建，然后被覆盖
+    private async Task MoveAsync(string source, string destination, bool overwrite, CancellationToken cancellationToken)
     {
+        if (!overwrite && !OperatingSystem.IsWindows())
+        {
+            switch (_mover.Move(source, destination))
+            {
+                case NoReplaceOutcome.Moved:
+                    return;
+                case NoReplaceOutcome.TargetExists:
+                    throw new IOException($"目标文件 \"{destination}\" 已经存在。");
+                case NoReplaceOutcome.Unsupported:
+                    WarnNonAtomicMove(destination);
+                    break;
+            }
+        }
+
         for (var attempt = 1; ; attempt++)
         {
             try
@@ -203,6 +225,25 @@ internal sealed class AttachmentFiles
             {
                 await Task.Delay(FirstMoveRetryDelayMilliseconds << (attempt - 1), cancellationToken);
             }
+        }
+    }
+
+    // 系统和文件系统都不支持原子的“不覆盖改名”，退回到先检查再改名：极小的概率下，同时创建的同名文件会被覆盖。
+    // 降级但仍能工作，进程里只记一次，免得每个附件一条
+    private void WarnNonAtomicMove(string destination)
+    {
+        if (Interlocked.Exchange(ref _warnedAboutNonAtomicMove, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _diagnostics.WriteLine($"[sidecar] 警告：{Path.GetDirectoryName(destination)} 所在的文件系统不支持原子的“不覆盖”改名（renameat2、renamex_np、link 都不可用），已退回到先检查再改名。");
+        }
+        catch (IOException)
+        {
+            // stderr 写不出去也不能影响保存
         }
     }
 

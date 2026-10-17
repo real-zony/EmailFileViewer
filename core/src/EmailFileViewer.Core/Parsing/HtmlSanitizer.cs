@@ -78,6 +78,9 @@ internal sealed partial class HtmlSanitizer
     private readonly int _maxOutputLength;
     private bool _hasRemoteContent;
 
+    // 当前在几层 <math> 里面。MathML 元素上的 href 在 WebKit 里可能被当成链接，点击后同样会把 iframe 导航走
+    private int _mathDepth;
+
     private HtmlSanitizer(InlineResourceResolver? resolver, int maxOutputLength)
     {
         _resolver = resolver;
@@ -110,8 +113,17 @@ internal sealed partial class HtmlSanitizer
         string? skipUntilEndOf = null;
         var inStyle = false;
 
+        // 样式表的文字：分词器遇到 < 就会把它拆成好几段（"a{b:url(h<!--ttp://x)}" 拆成 "a{b:url(h" 和 "<!--ttp://x)}"），
+        // 逐段检查会漏掉跨段的地址，所以连续的几段先攒起来，遇到别的内容时一起处理
+        var styleText = new StringBuilder();
+
         while (tokenizer.ReadNextToken(out var token))
         {
+            if (styleText.Length > 0 && token is not HtmlDataToken or HtmlScriptDataToken)
+            {
+                FlushStyleText(builder, styleText);
+            }
+
             // 超过长度上限：在这个位置截断，后面的内容不要了
             if (builder.Length > _maxOutputLength)
             {
@@ -138,7 +150,7 @@ internal sealed partial class HtmlSanitizer
                 case HtmlDataToken data:
                     if (inStyle)
                     {
-                        builder.Append(ToRawStyleText(_css.Process(data.Data)));
+                        styleText.Append(data.Data);
                     }
                     else
                     {
@@ -152,7 +164,20 @@ internal sealed partial class HtmlSanitizer
             }
         }
 
+        FlushStyleText(builder, styleText);
         return builder.ToString();
+    }
+
+    // 处理攒下来的样式文字：先去掉 <!-- --> 标记，再检查地址，最后转义 <
+    private void FlushStyleText(StringBuilder builder, StringBuilder styleText)
+    {
+        if (styleText.Length == 0)
+        {
+            return;
+        }
+
+        builder.Append(ToRawStyleText(_css.Process(RemoveCommentMarkers(styleText.ToString()))));
+        styleText.Clear();
     }
 
     private void HandleTag(StringBuilder builder, HtmlTagToken tag, ref string? skipUntilEndOf, ref bool inStyle)
@@ -174,6 +199,10 @@ internal sealed partial class HtmlSanitizer
             {
                 inStyle = false;
             }
+            else if (name.Equals("math", StringComparison.OrdinalIgnoreCase) && _mathDepth > 0)
+            {
+                _mathDepth--;
+            }
 
             builder.Append("</").Append(name).Append('>');
             return;
@@ -194,13 +223,25 @@ internal sealed partial class HtmlSanitizer
             return;
         }
 
-        var attributes = SanitizeAttributes(name, tag);
-
-        // <style/> 在 HTML 里仍然是起始标签（斜杠被忽略），后面的文字是样式，所以和 <style> 一样处理，输出时也不保留斜杠
         var isStyle = name.Equals("style", StringComparison.OrdinalIgnoreCase);
+        if (isStyle && tag.IsEmptyElement)
+        {
+            // <style/> 在 HTML 里是起始标签（斜杠被忽略），在 SVG 里却是自闭合的，浏览器和分词器各按各的理解，后面的文字到底算不算样式说不准。
+            // 所以只输出一个空的 <style></style>，不进入样式模式：后面的文字都当普通内容处理（标签清理、文字转义），不会有未经处理的 CSS 漏过去
+            builder.Append('<').Append(name).Append("></").Append(name).Append('>');
+            return;
+        }
+
+        var isMath = name.Equals("math", StringComparison.OrdinalIgnoreCase);
+        var attributes = SanitizeAttributes(name, tag, inMath: isMath || _mathDepth > 0);
+
         if (isStyle)
         {
             inStyle = true;
+        }
+        else if (isMath && !tag.IsEmptyElement)
+        {
+            _mathDepth++;
         }
 
         builder.Append('<').Append(name);
@@ -215,17 +256,42 @@ internal sealed partial class HtmlSanitizer
             }
         }
 
-        builder.Append(tag.IsEmptyElement && !isStyle ? "/>" : ">");
+        builder.Append(tag.IsEmptyElement ? "/>" : ">");
     }
 
-    // 样式表是原始文本，浏览器不会解码实体。先去掉 Outlook 常见的 <!-- --> 包装（CSS 里它们没有意义，留着还会让第一条规则失效），
-    // 再把剩下的每个 < 转义成 CSS 的 \3C，保证输出里没有 <，免得在 SVG 等上下文里被浏览器当成标签
+    // 去掉 Outlook 常见的 <!-- --> 包装（CSS 里它们没有意义，留着还会让第一条规则失效）。
+    // 必须在检查地址之前做：url(h<!--ttp://...) 去掉标记后就是 url(http://...)，先检查的话会被当成相对地址漏掉。
+    // 删掉一个标记可能让两边的字符拼出新的标记（<<!---->!-- 删完是 <!--），所以边读边删：每追加一个字符就看结尾是不是标记，
+    // 是就删掉，输出里就不会再有任何标记；一遍扫描，耗时与长度成正比
+    private static string RemoveCommentMarkers(string css)
+    {
+        if (!css.Contains("<!--", StringComparison.Ordinal) && !css.Contains("-->", StringComparison.Ordinal))
+        {
+            return css;
+        }
+
+        var builder = new StringBuilder(css.Length);
+        foreach (var c in css)
+        {
+            builder.Append(c);
+            var length = builder.Length;
+            if (c == '>' && length >= 3 && builder[length - 2] == '-' && builder[length - 3] == '-')
+            {
+                builder.Length = length - 3;
+            }
+            else if (c == '-' && length >= 4 && builder[length - 2] == '-' && builder[length - 3] == '!' && builder[length - 4] == '<')
+            {
+                builder.Length = length - 4;
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    // 把每个 < 转义成 CSS 的 \3C，保证输出里没有 <，免得在 SVG 等上下文里被浏览器当成标签。样式表是原始文本，浏览器不会解码实体
     private static string ToRawStyleText(string css)
     {
-        return css
-            .Replace("<!--", string.Empty, StringComparison.Ordinal)
-            .Replace("-->", string.Empty, StringComparison.Ordinal)
-            .Replace("<", "\\3C ", StringComparison.Ordinal);
+        return css.Replace("<", "\\3C ", StringComparison.Ordinal);
     }
 
     // 文本里转义 & < >；属性值里还要转义双引号。不间断空格写成实体，免得源码里看不见
@@ -280,7 +346,7 @@ internal sealed partial class HtmlSanitizer
             .Contains("stylesheet", StringComparer.OrdinalIgnoreCase);
     }
 
-    private List<(string Name, string? Value)> SanitizeAttributes(string tagName, HtmlTagToken tag)
+    private List<(string Name, string? Value)> SanitizeAttributes(string tagName, HtmlTagToken tag, bool inMath)
     {
         var result = new List<(string Name, string? Value)>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -296,6 +362,12 @@ internal sealed partial class HtmlSanitizer
             }
 
             if (name.StartsWith("on", StringComparison.OrdinalIgnoreCase) || RemovedAttributes.Contains(name))
+            {
+                continue;
+            }
+
+            // MathML 元素上的 href 一律删掉：WebKit 会把它当成链接
+            if (inMath && IsLinkAddress(name))
             {
                 continue;
             }
@@ -439,22 +511,42 @@ internal sealed partial class HtmlSanitizer
         return string.Join(", ", candidates);
     }
 
-    // 链接：在新窗口打开，不带来源信息，title 写成实际地址（去掉浏览器导航时会忽略的换行和制表符），这样悬停时不需要脚本也能看到真实地址。
-    // 只有锚点的链接是页内跳转：不加 target、rel、title，但要把地址写成 about:srcdoc#锚点
+    // 链接（HTML 的 a、area，以及 SVG 里的 a）：
+    // - 地址为空（没有值、空串、只有空白）的 href 删掉：空地址会按父页面的地址解析，点击后 iframe 被导航到应用自己的页面；
+    // - 只有锚点的地址写成 about:srcdoc#锚点，不加 rel、title，邮件里原有的 target 也删掉（否则点了不滚动）；
+    // - 其他地址在新窗口打开，不带来源信息，title 写成实际地址（去掉浏览器导航时会忽略的换行和制表符），这样悬停时不需要脚本也能看到真实地址。
+    // href 和 xlink:href 走同一套处理；SVG 2 里两个都有时用 href，所以由 href 决定这是页内跳转还是外部链接
     private static void ApplyLinkAttributes(List<(string Name, string? Value)> attributes)
     {
-        var hrefIndex = attributes.FindIndex(a => a.Name.Equals("href", StringComparison.OrdinalIgnoreCase));
-        var href = hrefIndex < 0 ? null : attributes[hrefIndex].Value;
-        if (string.IsNullOrWhiteSpace(href))
+        attributes.RemoveAll(a => IsLinkAddress(a.Name) && UrlClassifier.Classify(a.Value) == UrlKind.Empty);
+
+        var primary = attributes.FindIndex(a => a.Name.Equals("href", StringComparison.OrdinalIgnoreCase));
+        if (primary < 0)
+        {
+            primary = attributes.FindIndex(a => a.Name.Equals("xlink:href", StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (primary < 0)
         {
             return;
         }
 
-        if (UrlClassifier.Classify(href) == UrlKind.Fragment)
+        var primaryAddress = attributes[primary].Value!;
+        var isPageLink = UrlClassifier.Classify(primaryAddress) == UrlKind.Fragment;
+
+        for (var i = 0; i < attributes.Count; i++)
         {
             // 正文放在 srcdoc iframe 里，浏览器会按父页面的地址解析 "#x"（tauri://localhost#x），点击后 iframe 被导航到应用自己的页面。
             // 写成 about:srcdoc#x 就是文档自己的地址加锚点，在 iframe 内滚动；<base> 被 CSP 的 base-uri 'none' 禁用，不能用它解决
-            attributes[hrefIndex] = (attributes[hrefIndex].Name, SrcdocUrlPrefix + UrlClassifier.Clean(href));
+            if (IsLinkAddress(attributes[i].Name) && UrlClassifier.Classify(attributes[i].Value) == UrlKind.Fragment)
+            {
+                attributes[i] = (attributes[i].Name, SrcdocUrlPrefix + UrlClassifier.Clean(attributes[i].Value));
+            }
+        }
+
+        if (isPageLink)
+        {
+            attributes.RemoveAll(a => a.Name.Equals("target", StringComparison.OrdinalIgnoreCase));
             return;
         }
 
@@ -463,6 +555,12 @@ internal sealed partial class HtmlSanitizer
             || a.Name.Equals("title", StringComparison.OrdinalIgnoreCase));
         attributes.Add(("target", "_blank"));
         attributes.Add(("rel", "noopener noreferrer"));
-        attributes.Add(("title", UrlClassifier.Clean(href)));
+        attributes.Add(("title", UrlClassifier.Clean(primaryAddress)));
+    }
+
+    private static bool IsLinkAddress(string attributeName)
+    {
+        return attributeName.Equals("href", StringComparison.OrdinalIgnoreCase)
+            || attributeName.Equals("xlink:href", StringComparison.OrdinalIgnoreCase);
     }
 }

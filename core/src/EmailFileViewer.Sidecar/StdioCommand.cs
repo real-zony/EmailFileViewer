@@ -57,10 +57,11 @@ internal static class StdioCommand
         var registry = new DocumentRegistry();
         try
         {
-            var methods = new SidecarMethods(registry, session, new AttachmentFiles(options?.PathExists)).CreateTable();
+            var diagnostics = TextWriter.Synchronized(error);
+            var methods = new SidecarMethods(registry, session, new AttachmentFiles(options?.PathExists, diagnostics: diagnostics)).CreateTable();
             options?.ConfigureMethods?.Invoke(methods);
 
-            var host = new ProtocolHost(methods, registry.Find, TextWriter.Synchronized(error), options?.MaxConcurrency, options?.InputClosedGrace);
+            var host = new ProtocolHost(methods, registry.Find, diagnostics, options?.MaxConcurrency, options?.InputClosedGrace);
             return await host.RunAsync(input, output, cancellationToken);
         }
         finally

@@ -378,26 +378,108 @@ public class SanitizerHardeningTests
     // ---- 远程内容漏判 ----
 
     [Theory]
-    [InlineData("<style/>body{background:url(http://evil.example/a.png)}</style><p>x</p>")]
-    [InlineData("<STYLE />@import \"https://evil.example/a.css\";</style><p>x</p>")]
-    [InlineData("<svg><style/>a{b:url(http://evil.example/a.png)}</style></svg>")]
-    [Trait("Scenario", "email-viewing / 远程内容默认不加载 / 自闭合写法的 style 同样要处理")]
-    public void SelfClosingStyle_IsTreatedAsAnOpeningStyleTag(string html)
+    [InlineData("<style/>body{background:url(http://evil.example/a.png)}</style><p>x</p>", "<style></style>body{background:url(http://evil.example/a.png)}</style><p>x</p>")]
+    [InlineData("<STYLE />@import \"https://evil.example/a.css\";</style><p>x</p>", "<STYLE></STYLE>@import \"https://evil.example/a.css\";</style><p>x</p>")]
+    [InlineData("<svg><style/><img src=x onerror=alert(1)></style></svg>", "<svg><style></style><img src=\"x\"></style></svg>")]
+    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / 自闭合写法的 style 只输出一个空的 style，不进入样式模式")]
+    public void SelfClosingStyle_BecomesAnEmptyStyleElement_AndDoesNotStartStyleMode(string html, string expected)
+    {
+        var result = Run(html);
+
+        // 后面的文字当普通内容处理（转义、清理标签），不会作为 CSS 漏过检查；也就没有远程内容可言
+        Assert.Equal(expected, result.Html);
+        Assert.False(result.HasRemoteContent);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / 自闭合写法的 style 之后的真正的 style 照常处理")]
+    public void SelfClosingStyle_DoesNotAffectALaterRealStyleElement()
+    {
+        var result = Run("<style/><p>x</p><style>a{background:url(javascript:x)} b{background:url(http://evil.example/b.png)}</style>");
+
+        Assert.Equal("<style></style><p>x</p><style>a{background:url(\"about:blank\")} b{background:url(http://evil.example/b.png)}</style>", result.Html);
+        Assert.True(result.HasRemoteContent);
+    }
+
+    // ---- 样式里的 <!-- --> 标记要先去掉再检查地址 ----
+
+    [Theory]
+    [InlineData("<style>a{b:url(h<!--ttp://evil.example/c.png)}</style>", "<style>a{b:url(http://evil.example/c.png)}</style>")]
+    [InlineData("<style>@import \"ht<!--tp://evil.example/c.css\";</style>", "<style>@import \"http://evil.example/c.css\";</style>")]
+    [InlineData("<style>a{b:url(http:/-->/evil.example/c.png)}</style>", "<style>a{b:url(http://evil.example/c.png)}</style>")]
+    // 删掉一个标记后两边的字符又拼出新的标记
+    [InlineData("<style>a{b:url(h<<!---->!--ttp://evil.example/c.png)}</style>", "<style>a{b:url(http://evil.example/c.png)}</style>")]
+    [InlineData("<style>a{b:url(h<!<!----ttp://evil.example/c.png)}</style>", "<style>a{b:url(http://evil.example/c.png)}</style>")]
+    [InlineData("<style>a{b:image-set(\"h<!--ttp://evil.example/c.png\" 1x)}</style>", "<style>a{b:image-set(\"http://evil.example/c.png\" 1x)}</style>")]
+    [Trait("Scenario", "email-viewing / 远程内容默认不加载 / 样式里被注释标记隔开的远程地址同样识别")]
+    public void CommentMarkersInsideStyleText_AreRemovedBeforeTheAddressesAreChecked(string html, string expected)
+    {
+        var result = Run(html);
+
+        Assert.Equal(expected, result.Html);
+        Assert.True(result.HasRemoteContent);
+    }
+
+    [Theory]
+    [InlineData("<style>a{b:url(http://evil.example/<x>.png)}</style>")]
+    [InlineData("<style>@import \"http://evil.example/<x>.css\";</style>")]
+    [InlineData("<style>a{b:image-set(\"http://evil.example/<x>.png\" 1x)}</style>")]
+    [Trait("Scenario", "email-viewing / 远程内容默认不加载 / 分词器在 < 处拆开的样式文字也按整体检查")]
+    public void StyleTextSplitByTheTokenizerAtALessThanSign_IsCheckedAsAWhole(string html)
     {
         var result = Run(html);
 
         Assert.True(result.HasRemoteContent, result.Html);
-        Assert.DoesNotContain("<style/>", result.Html, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("<style />", result.Html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<", result.Html[7..^8]);
     }
 
     [Fact]
-    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / 自闭合写法的 style 里的危险地址也被清理")]
-    public void SelfClosingStyle_DangerousUrlIsNeutralized()
+    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / 被注释标记隔开的危险地址同样被换掉")]
+    public void CommentMarkersInsideStyleText_DangerousUrlSplitByAMarkerIsNeutralized()
     {
-        var result = Run("<style/>a{background:url(javascript:x)}</style>");
+        var result = Run("<style>a{b:url(java<!--script:alert(1))}</style>");
 
-        Assert.Equal("<style>a{background:url(\"about:blank\")}</style>", result.Html);
+        Assert.DoesNotContain("javascript", result.Html);
+        Assert.Contains("about:blank", result.Html);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / Outlook 的注释包装仍然被去掉")]
+    public void OutlookCommentWrapper_IsStillRemoved()
+    {
+        var result = Run("<style><!-- a{color:red} --></style>");
+
+        Assert.Equal("<style> a{color:red} </style>", result.Html);
+    }
+
+    [Theory]
+    [InlineData("<!--")]
+    [InlineData("-->")]
+    [InlineData("<!--x-->")]
+    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / 病态样式不拖垮解析（注释标记重复）")]
+    public void RepeatedCommentMarkers_AreLinear(string marker)
+    {
+        var html = "<style>" + string.Concat(Enumerable.Repeat(marker, 250_000)) + "a{}</style>";
+
+        var elapsed = Measure(() => Run(html));
+
+        Assert.True(elapsed < PathologicalLimit, $"耗时 {elapsed.TotalSeconds:F1} 秒");
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 正文在沙箱中渲染 / 病态样式不拖垮解析（层层嵌套的注释标记）")]
+    public void NestedCommentMarkers_AreLinear_AndFullyRemoved()
+    {
+        // <!<!<!...-- --... 每删掉最里面的一个标记，外面的又拼成一个新的标记
+        const int depth = 100_000;
+        var html = "<style>a{b:url(h" + string.Concat(Enumerable.Repeat("<!", depth)) + string.Concat(Enumerable.Repeat("--", depth)) + "ttp://evil.example/c.png)}</style>";
+
+        var result = default(SanitizedHtml);
+        var elapsed = Measure(() => result = Run(html));
+
+        Assert.True(elapsed < PathologicalLimit, $"耗时 {elapsed.TotalSeconds:F1} 秒");
+        Assert.True(result.HasRemoteContent);
+        Assert.Equal("<style>a{b:url(http://evil.example/c.png)}</style>", result.Html);
     }
 
     [Theory]
@@ -446,6 +528,86 @@ public class SanitizerHardeningTests
 
         Assert.False(result.HasRemoteContent);
         Assert.DoesNotContain("javascript", result.Html);
+    }
+
+    // ---- 链接：SVG 的 xlink:href、MathML 的 href、空 href ----
+
+    [Theory]
+    [InlineData("<svg><a xlink:href=\"https://evil.example/\"><text>t</text></a></svg>", "<svg><a xlink:href=\"https://evil.example/\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://evil.example/\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"foo.html\"><text>t</text></a></svg>", "<svg><a xlink:href=\"foo.html\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"foo.html\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"#x\"><text>t</text></a></svg>", "<svg><a xlink:href=\"about:srcdoc#x\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"#\"><text>t</text></a></svg>", "<svg><a xlink:href=\"about:srcdoc#\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"#x\" target=\"_blank\"><text>t</text></a></svg>", "<svg><a xlink:href=\"about:srcdoc#x\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a href=\"#y\"><text>t</text></a></svg>", "<svg><a href=\"about:srcdoc#y\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"\"><text>t</text></a></svg>", "<svg><a><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"  \"><text>t</text></a></svg>", "<svg><a><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href><text>t</text></a></svg>", "<svg><a><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"javascript:alert(1)\"><text>t</text></a></svg>", "<svg><a><text>t</text></a></svg>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / SVG 里的 a 用 xlink:href 时和 href 同样处理")]
+    public void SvgAnchorXlinkHref_IsHandledLikeHref(string html, string expected)
+    {
+        var result = Run(html);
+
+        Assert.Equal(expected, result.Html);
+    }
+
+    [Theory]
+    // href 优先：href 是锚点就是页内跳转，xlink:href 照样处理
+    [InlineData("<svg><a href=\"#x\" xlink:href=\"https://evil.example/\"><text>t</text></a></svg>", "<svg><a href=\"about:srcdoc#x\" xlink:href=\"https://evil.example/\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a xlink:href=\"#x\" href=\"#y\" target=\"_blank\"><text>t</text></a></svg>", "<svg><a xlink:href=\"about:srcdoc#x\" href=\"about:srcdoc#y\"><text>t</text></a></svg>")]
+    // href 是外部地址：加 target、rel，title 取 href；xlink:href 是锚点也改写
+    [InlineData("<svg><a xlink:href=\"#x\" href=\"https://a.example/p\"><text>t</text></a></svg>", "<svg><a xlink:href=\"about:srcdoc#x\" href=\"https://a.example/p\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://a.example/p\"><text>t</text></a></svg>")]
+    // 一个为空，另一个照常
+    [InlineData("<svg><a href=\"\" xlink:href=\"https://a.example/\"><text>t</text></a></svg>", "<svg><a xlink:href=\"https://a.example/\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://a.example/\"><text>t</text></a></svg>")]
+    [InlineData("<svg><a href=\"https://a.example/\" xlink:href=\"\"><text>t</text></a></svg>", "<svg><a href=\"https://a.example/\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://a.example/\"><text>t</text></a></svg>")]
+    // 一个危险（删掉），另一个照常
+    [InlineData("<svg><a href=\"javascript:alert(1)\" xlink:href=\"#x\"><text>t</text></a></svg>", "<svg><a xlink:href=\"about:srcdoc#x\"><text>t</text></a></svg>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / SVG 的 a 同时有 href 和 xlink:href 时两个都处理")]
+    public void SvgAnchorWithBothHrefAttributes_BothAreHandled(string html, string expected)
+    {
+        var result = Run(html);
+
+        Assert.Equal(expected, result.Html);
+    }
+
+    [Theory]
+    [InlineData("<math><mi href=\"foo\">x</mi><mtext href=\"#x\">y</mtext></math>", "<math><mi>x</mi><mtext>y</mtext></math>")]
+    [InlineData("<math href=\"foo\"><mrow xlink:href=\"foo\" HREF=\"bar\">x</mrow></math>", "<math><mrow>x</mrow></math>")]
+    [InlineData("<math><mrow><a href=\"https://a.example/\">x</a></mrow></math>", "<math><mrow><a>x</a></mrow></math>")]
+    [InlineData("<math><mi href=\"\">x</mi></math>", "<math><mi>x</mi></math>")]
+    [InlineData("<math><mi class=\"c\" href=\"foo\" id=\"i\">x</mi></math>", "<math><mi class=\"c\" id=\"i\">x</mi></math>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / MathML 元素上的 href 一律删掉")]
+    public void HrefOnMathMlElements_IsRemoved(string html, string expected)
+    {
+        var result = Run(html);
+
+        Assert.Equal(expected, result.Html);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / MathML 之外的链接照常处理")]
+    public void LinksOutsideMathMl_AreHandledNormally()
+    {
+        var result = Run("<a href=\"https://a.example/1\">before</a><math><mi href=\"foo\">x</mi></math><a href=\"https://a.example/2\">after</a><math/><a href=\"#z\">self-closed</a>");
+
+        Assert.Equal(
+            "<a href=\"https://a.example/1\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://a.example/1\">before</a>"
+            + "<math><mi>x</mi></math>"
+            + "<a href=\"https://a.example/2\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://a.example/2\">after</a>"
+            + "<math/><a href=\"about:srcdoc#z\">self-closed</a>",
+            result.Html);
+    }
+
+    [Fact]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 嵌套的 math 要全部关闭后才恢复链接")]
+    public void NestedMath_StripsHrefUntilTheOutermostEnds()
+    {
+        var result = Run("<math><mrow><math><mi href=\"a\">1</mi></math><mi href=\"b\">2</mi></mrow></math><span href=\"c\">3</span><a href=\"d\">4</a>");
+
+        Assert.Equal(
+            "<math><mrow><math><mi>1</mi></math><mi>2</mi></mrow></math><span href=\"c\">3</span>"
+            + "<a href=\"d\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"d\">4</a>",
+            result.Html);
     }
 
     private static int CountOccurrences(string text, string value)

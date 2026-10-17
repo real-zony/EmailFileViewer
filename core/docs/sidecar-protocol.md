@@ -121,7 +121,14 @@ this is not json
 | `isEncrypted` | boolean | S/MIME 加密，无法显示正文（`body.sourceFormat` 为 `None`） |
 | `hasRemoteContent` | boolean | 正文引用了远程资源（图片、样式表、字体） |
 
-**锚点链接**：`<a>` 和 `<area>` 上只有锚点的 `href`（`#x`、`#`）会改写成 `about:srcdoc#x`、`about:srcdoc#`，锚点部分原样保留。正文渲染在 srcdoc iframe 里，浏览器会按父页面的地址把 `#x` 解析成应用自己的页面（`tauri://localhost#x`），点击后 iframe 就被导航走了；`about:srcdoc#x` 是文档自己的地址，只会在 iframe 内滚动。这类链接和以前一样不加 `target="_blank"`、`rel`、`title`。
+**链接**：正文渲染在 srcdoc iframe 里，浏览器会按父页面的地址解析相对地址，所以几种链接点击后会把 iframe 导航到应用自己的页面（正文就消失了）。清理时这样处理，规则同样适用于 SVG 里的 `<a>`（`href` 和 `xlink:href` 都处理；两个都有时由 `href` 决定是页内跳转还是外部链接）：
+
+- 只有锚点的地址（`#x`、`#`）改写成 `about:srcdoc#x`、`about:srcdoc#`，锚点部分原样保留；`about:srcdoc#x` 是文档自己的地址，只会在 iframe 内滚动。这类链接不加 `rel`、`title`，邮件里原有的 `target` 也删掉（否则点击会打开新窗口而不是滚动）。
+- 地址为空的 `href`（`href=""`、`href=" "`、没有值的 `href`）整个删掉。
+- 其他地址加 `target="_blank"`、`rel="noopener noreferrer"`，`title` 写成去掉换行和制表符之后的实际地址。
+- MathML 元素（`<math>` 里的所有元素）上的 `href`、`xlink:href` 一律删掉，WebKit 会把它们当成链接。
+
+**样式**：`<style/>`（自闭合写法）只输出一个空的 `<style></style>`，后面的文字当普通文字处理，不会作为样式漏过检查。样式文字里的 `<!--`、`-->`（Outlook 常见的包装）先去掉再检查地址，所以 `url(h<!--ttp://…)` 也会被识别为远程地址。
 
 **正文的大小上限**（Core 里的具名常量）：
 
@@ -316,7 +323,10 @@ this is not json
 1. 清理文件名：去掉路径成分（`../../.bashrc` 变成 `.bashrc`）、替换各平台的非法字符、处理 Windows 保留名（`CON.txt` 变成 `_CON.txt`）、限制长度；没有文件名时用 `attachment`。
 2. 目标文件夹里已有同名文件（或前面的附件刚用了这个名字）时生成 `name (1).ext`、`name (2).ext`……
 3. 确认最终路径在目标文件夹之内。
-4. 先写进目标文件夹里的临时文件（`.efv-<随机>.tmp`），写完并落盘后，再用“只改名、不覆盖”的方式改成最终名字。取名之后、改名之前别的进程抢先创建了同名文件时，改名会失败，这时重新取名，绝不覆盖。所以最终名字的文件一定是完整的；进程在写入过程中被强行结束，文件夹里最多留下一个临时文件。
+4. 先写进目标文件夹里的临时文件（`.efv-<随机>.tmp`），写完并落盘后，再用**原子的**“目标不存在才改名”改成最终名字。取名之后、改名之前别的进程抢先创建了同名文件时，改名会失败（`EEXIST`），这时重新取名，绝不覆盖。所以最终名字的文件一定是完整的；进程在写入过程中被强行结束，文件夹里最多留下一个临时文件。
+   - 原子改名的做法：Linux 用 `renameat2(RENAME_NOREPLACE)`，macOS 用 `renamex_np(RENAME_EXCL)`，Windows 的改名本来就不覆盖。（.NET 的 `File.Move(overwrite: false)` 在 Unix 上是先检查再 `rename()`，两步之间有竞态，所以不用它。）
+   - 系统调用或文件系统不支持（`EINVAL`、`ENOSYS`、`ENOTSUP`，或者系统里没有这个函数）时，退回到 `link()` 加 `unlink()`，`link()` 在目标存在时同样原子地失败。
+   - 两种都不支持（个别文件系统，例如不支持硬链接的 FAT）时，才退回到先检查再改名，并在 stderr 写一条警告（整个进程只写一次）。
 5. 单个附件失败（磁盘满等）记入 `failed`，不影响其他附件；失败附件的临时文件会被删除。`failed[].code` 是 `write_failed` 或 `internal_error`。
 
 文档没有附件时返回两个空数组。可执行文件和脚本同样会被保存。
@@ -350,7 +360,7 @@ this is not json
 行为：
 
 - **可执行文件和脚本直接拒绝**（`executable_refused`），什么都不写。按清理后文件名的最后一个扩展名判断，不区分大小写，`invoice.pdf.exe` 也算可执行。扩展名清单见设计文档 D6：Windows（`.exe .bat .cmd .com .msi .ps1 .vbs .js .jse .wsf .scr .lnk .hta .cpl`，以及 `.chm .appref-ms .diagcab .settingcontent-ms .library-ms .search-ms .wsc .sct .inf .msp`）、macOS（`.app .command .pkg`，以及 `.dmg .terminal .fileloc .inetloc .webloc`）、Linux（`.sh .desktop .AppImage .run`），以及 `.jar .vbe .ws .wsh .psm1 .psd1 .ps1xml .reg .msc .scf .url .pif .msix .msixbundle .appx .appxbundle .appinstaller .application .xll .iso .img .vhd .vhdx`。不论来自哪个系统，只要扩展名在表里就拒绝。
-- 文件写在 `<每个用户自己的临时目录>/EmailFileViewer/sessions/<会话 Id>/<docId>/<清理后的文件名>`（临时目录的位置见“7. 文档与临时目录的生命周期”），同一个文档里两个附件重名时第二个是 `name (1).ext`。先写临时文件再改名，打开程序不会读到写了一半的文件。
+- 文件写在 `<每个用户自己的临时目录>/EmailFileViewer/sessions/<会话 Id>/<docId>/<清理后的文件名>`（临时目录的位置见“7. 文档与临时目录的生命周期”），同一个文档里两个附件重名时第二个是 `name (1).ext`。先写临时文件再改名，打开程序不会读到写了一半的文件。改名是原子的“目标不存在才改”（见 `attachment.saveAll` 第 4 步），不会覆盖别的程序同时创建的同名文件。
 - 同一个附件再次提取时，直接返回上次的路径（文件还在的话）。
 - 路径的使用方式由 Rust 决定；sidecar 不负责打开文件。
 

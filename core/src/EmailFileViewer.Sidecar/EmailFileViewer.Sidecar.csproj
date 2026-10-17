@@ -6,6 +6,8 @@
     <PublishAot>true</PublishAot>
     <!-- sidecar 不需要区域文化数据；开启后 Linux 上不依赖 libicu。字符集解码走 CodePagesEncodingProvider，不受影响 -->
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- LibraryImport 生成的原生调用代码（NoReplaceMover 里的 renameat2 / renamex_np / link）需要 unsafe -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
