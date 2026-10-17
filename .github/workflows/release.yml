@@ -248,7 +248,16 @@ jobs:
         run: |
           packaged="$SIDECAR_EXE"
           if [ "$RUNNER_OS" = macOS ]; then
-            app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/EmailFileViewer.app"
+            # 打完 dmg 后 bundler 会删掉中间的 .app，所以挂载 dmg，检查用户实际拿到的那份
+            dmg="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -name '*.dmg' | head -n 1)"
+            if [ -z "$dmg" ]; then
+              echo "::error::找不到构建出来的 dmg"
+              exit 1
+            fi
+            mnt="$(mktemp -d)"
+            hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" > /dev/null
+            trap 'hdiutil detach "$mnt" > /dev/null || true' EXIT
+            app="$mnt/EmailFileViewer.app"
             codesign --verify --deep --strict --verbose=2 "$app"
             codesign -dv "$app" 2>&1 | grep -E '^(Signature|Authority|TeamIdentifier)' || true
             packaged="$app/Contents/MacOS/efv-sidecar"
