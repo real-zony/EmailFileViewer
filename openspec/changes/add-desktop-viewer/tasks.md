@@ -75,7 +75,7 @@
 - [ ] 9.3 **（需要用户操作）** 准备 Apple Developer Program 账号和 Windows 签名渠道（Certum 或 SignPath），把凭据配置进 GitHub Secrets；验证 `docs/release.md` 中列出的 Secrets 都已配置
 - [ ] 9.4 在 release 流程中加入 macOS 签名和公证，并对应用和 sidecar 执行 `codesign -dv` 和 `spctl -a -vv` 检查；验证在一台干净的 Mac 上从浏览器下载 dmg 后首次打开不出现拦截提示
 - [ ] 9.5 通过 `signCommand` 接入 Windows 签名，对安装程序、主程序和 sidecar 执行 `signtool verify /pa`；验证在 Windows 上运行安装程序时显示发布者名称
-- [ ] 9.7 按 design.md D13 实现 Windows 绿色版：通过标记文件判断是否为绿色模式，数据目录放在 exe 旁边（不可写时退回标准目录），启动前检测 WebView2 并在缺少时用原生对话框提示，release.yml 产出 `x64-portable.zip` 并加入 SHA256SUMS，docs/release.md 和验收清单补上对应检查项；验证：Rust 单元测试覆盖模式判断、目录选择和退回逻辑，测试标签构建出的 zip 内容正确，`app-distribution` 中绿色版的各场景在验收清单中都有对应检查项
+- [x] 9.7 按 design.md D13 实现 Windows 绿色版：通过标记文件判断是否为绿色模式，数据目录放在 exe 旁边（不可写时退回标准目录），启动前检测 WebView2 并在缺少时用原生对话框提示，release.yml 产出 `x64-portable.zip` 并加入 SHA256SUMS，docs/release.md 和验收清单补上对应检查项；验证：Rust 单元测试覆盖模式判断、目录选择和退回逻辑，测试标签构建出的 zip 内容正确，`app-distribution` 中绿色版的各场景在验收清单中都有对应检查项
 - [ ] 9.6 验证卸载：在 Windows 和通过 deb 安装的 Ubuntu 上卸载后，应用文件被删除且 `.eml` / `.msg` 不再关联本应用
 
 ## 10. 端到端验收
