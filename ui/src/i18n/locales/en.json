@@ -163,6 +163,8 @@
     "corrupted": "The attachment is damaged or can't be read.",
     "unreadable": "The file can't be read.",
     "dialog_failed": "The system dialog could not be shown.",
+    "timeout": "The operation timed out. The file may still be saving, so check the destination.",
+    "openTimeout": "Opening the attachment timed out. Try again.",
     "generic": "Something went wrong. Try again."
   }
 }

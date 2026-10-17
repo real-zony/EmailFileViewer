@@ -81,7 +81,7 @@ export function Toasts({ toasts, controller }: ToastsProps) {
             const name = toast.name || unnamed
             return (
               <Toast key={toast.id} title={t(`toast.${toast.operation}`, { name })} actions={dismiss(toast.id)}>
-                {t(`reason.${operationReason(toast.code)}`)}
+                {t(`reason.${operationReason(toast.code, toast.operation)}`)}
               </Toast>
             )
           }
@@ -97,7 +97,7 @@ export function Toasts({ toasts, controller }: ToastsProps) {
               >
                 {failed > 0 && (
                   <>
-                    {t(`reason.${operationReason(toast.code ?? '')}`)}
+                    {t(`reason.${operationReason(toast.code ?? '', 'saveAllFailed')}`)}
                     <br />
                     {toast.failedNames.map((name, i) => (
                       <Fragment key={i}>

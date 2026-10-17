@@ -5,7 +5,7 @@ import { BODY_CSP_BLOCKED, BODY_CSP_REMOTE, BODY_SANDBOX, bodyCsp, buildBodyDocu
 // 这两条字符串是 D5 和任务 7.5 的规定，写死在测试里，改了就要有人明确改规格
 const BLOCKED = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'"
 const ALLOWED =
-  "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:; base-uri 'none'; form-action 'none'"
+  "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:; media-src https: http:; base-uri 'none'; form-action 'none'"
 
 const parse = (srcdoc: string) => new DOMParser().parseFromString(srcdoc, 'text/html')
 const directives = (csp: string) => new Map(csp.split(';').map((d) => d.trim().split(/\s+(.*)/s) as [string, string]))
@@ -24,13 +24,17 @@ describe('iframe 的 sandbox 和 CSP（D5）', () => {
     expect(bodyCsp(false)).toBe(BLOCKED)
   })
 
-  it('用户允许后的 CSP：只在 img-src、style-src、font-src 中加入 https: http:，其余不变', () => {
+  it('用户允许后的 CSP：img-src、style-src、font-src 加入 https: http:，新增 media-src https: http:，其余不变', () => {
     expect(BODY_CSP_REMOTE).toBe(ALLOWED)
     expect(bodyCsp(true)).toBe(ALLOWED)
     const blocked = directives(BLOCKED)
     const allowed = directives(ALLOWED)
-    expect([...allowed.keys()]).toEqual([...blocked.keys()])
+    // 默认 CSP 没有 media-src（回落到 default-src 'none'，音视频被阻止）；放宽后只多出这一条
+    expect(blocked.has('media-src')).toBe(false)
+    expect([...allowed.keys()].filter((name) => name !== 'media-src')).toEqual([...blocked.keys()])
+    expect(allowed.get('media-src')).toBe('https: http:')
     for (const [name, value] of allowed) {
+      if (name === 'media-src') continue
       if (['img-src', 'style-src', 'font-src'].includes(name)) expect(value, name).toBe(`${blocked.get(name)} https: http:`)
       else expect(value, name).toBe(blocked.get(name))
     }
@@ -65,6 +69,18 @@ describe('buildBodyDocument', () => {
     expect(first.tagName).toBe('META')
     expect(first.getAttribute('http-equiv')).toBe('Content-Security-Policy')
     expect(first.getAttribute('content')).toBe(BLOCKED)
+  })
+
+  it('x-dns-prefetch-control 关闭预解析：紧跟在 CSP meta 之后，同样在邮件内容之前，默认和允许后都有', () => {
+    const dnsMeta = '<meta http-equiv="x-dns-prefetch-control" content="off">'
+    for (const remote of [false, true]) {
+      const srcdoc = buildBodyDocument(email, 'Html', remote)
+      expect(srcdoc.startsWith(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${bodyCsp(remote)}">${dnsMeta}`), String(remote)).toBe(true)
+      expect(srcdoc.indexOf(dnsMeta)).toBeLessThan(srcdoc.indexOf(email))
+      const metas = [...parse(srcdoc).head.querySelectorAll('meta')]
+      expect(metas.map((m) => m.getAttribute('http-equiv'))).toEqual(['Content-Security-Policy', 'x-dns-prefetch-control'])
+      expect(metas[1].getAttribute('content')).toBe('off')
+    }
   })
 
   // 邮件内容放在 body 里，在 CSP meta 之后：不论它写了什么，第一条 CSP 都不变

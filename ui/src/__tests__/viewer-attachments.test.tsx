@@ -120,6 +120,25 @@ describe('7.7 保存单个附件', () => {
     expect(within(region()).getAllByRole('status')).toHaveLength(2)
   })
 
+  it('保存超时：提示“操作超时，文件可能仍在保存”，不说文件已损坏', async () => {
+    const { api, user } = await startApp()
+    await deliver(api, 'attachments-multi')
+    api.failNext('saveAttachment', 'timeout')
+    await user.click(screen.getByRole('button', { name: 'Save report.pdf…' }))
+    const toasts = await screen.findByRole('region', { name: 'Notifications' })
+    expect(within(toasts).getByText("Couldn't save report.pdf")).toBeInTheDocument()
+    expect(within(toasts).getByText('The operation timed out. The file may still be saving, so check the destination.')).toBeInTheDocument()
+    expect(toasts.textContent).not.toMatch(/damaged/)
+  })
+
+  it('中文界面：保存超时的提示', async () => {
+    const { api, user } = await startApp({ language: 'zh-CN' })
+    await deliver(api, 'attachments-multi')
+    api.failNext('saveAttachment', 'timeout')
+    await user.click(screen.getByRole('button', { name: '保存 report.pdf…' }))
+    expect(await screen.findByText('操作超时，文件可能仍在保存，请检查目标位置。')).toBeInTheDocument()
+  })
+
   it('中文界面：保存失败的提示', async () => {
     const { api, user } = await startApp({ language: 'zh-CN' })
     await deliver(api, 'attachments-multi')
@@ -186,6 +205,38 @@ describe('7.7 保存全部附件', () => {
     expect(within(toasts).getByText("Couldn't save the attachments")).toBeInTheDocument()
   })
 
+  it('整个请求超时：提示“操作超时，文件可能仍在保存”', async () => {
+    const { api, user } = await startApp()
+    await deliver(api, 'attachments-multi')
+    api.failNext('saveAllAttachments', 'timeout')
+    await user.click(screen.getByRole('button', { name: 'Save all…' }))
+    const toasts = await screen.findByRole('region', { name: 'Notifications' })
+    expect(within(toasts).getByText("Couldn't save the attachments")).toBeInTheDocument()
+    expect(within(toasts).getByText('The operation timed out. The file may still be saving, so check the destination.')).toBeInTheDocument()
+  })
+
+  it('部分失败且原因是超时：汇总里同样提示“操作超时”', async () => {
+    const { api, user } = await startApp()
+    await deliver(api, 'attachments-multi')
+    api.override('saveAllAttachments', async () => ({
+      saved: [{ attachmentId: '2', path: '/x/report.pdf' }],
+      failed: [{ attachmentId: '3', code: 'timeout' }],
+    }))
+    await user.click(screen.getByRole('button', { name: 'Save all…' }))
+    const toasts = await screen.findByRole('region', { name: 'Notifications' })
+    expect(within(toasts).getByText('Saved 1 of 2 attachments')).toBeInTheDocument()
+    expect(toasts.textContent).toContain('The operation timed out.')
+    expect(toasts.textContent).not.toMatch(/damaged/)
+  })
+
+  it('中文界面：全部保存超时的提示', async () => {
+    const { api, user } = await startApp({ language: 'zh-CN' })
+    await deliver(api, 'attachments-multi')
+    api.failNext('saveAllAttachments', 'timeout')
+    await user.click(screen.getByRole('button', { name: '全部保存…' }))
+    expect(await screen.findByText('操作超时，文件可能仍在保存，请检查目标位置。')).toBeInTheDocument()
+  })
+
   it('中文界面：汇总', async () => {
     const { api, user } = await startApp({ language: 'zh-CN' })
     await deliver(api, 'attachments-multi')
@@ -219,6 +270,26 @@ describe('7.7 用系统默认程序打开附件', () => {
     api.failNext('openAttachment', 'write_failed')
     await user.click(within(attachmentCard('report.pdf')).getByRole('button', { name: 'Open' }))
     expect(await screen.findByText("Couldn't open report.pdf")).toBeInTheDocument()
+  })
+
+  it('打开附件超时（open_attachment 先把附件提取出来）：提示“打开附件超时，请重试”，不提目标位置，也不说文件已损坏', async () => {
+    const { api, user } = await startApp()
+    await deliver(api, 'attachments-multi')
+    api.failNext('openAttachment', 'timeout')
+    await user.click(within(attachmentCard('report.pdf')).getByRole('button', { name: 'Open' }))
+    expect(await screen.findByText("Couldn't open report.pdf")).toBeInTheDocument()
+    expect(screen.getByText('Opening the attachment timed out. Try again.')).toBeInTheDocument()
+    expect(screen.queryByText(/destination/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/damaged/)).not.toBeInTheDocument()
+  })
+
+  it('中文界面：打开附件超时的提示', async () => {
+    const { api, user } = await startApp({ language: 'zh-CN' })
+    await deliver(api, 'attachments-multi')
+    api.failNext('openAttachment', 'timeout')
+    await user.click(within(attachmentCard('report.pdf')).getByRole('button', { name: '打开' }))
+    expect(await screen.findByText('打开附件超时，请重试。')).toBeInTheDocument()
+    expect(screen.queryByText(/目标位置/)).not.toBeInTheDocument()
   })
 })
 

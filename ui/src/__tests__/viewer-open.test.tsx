@@ -617,6 +617,19 @@ describe('7.9 嵌套邮件在当前标签页内逐层进入，用面包屑返回
     expect(screen.queryByRole('navigation', { name: 'Message levels' })).not.toBeInTheDocument()
   })
 
+  it('打开嵌套邮件超时：属于解析，仍按“附件已损坏，或无法读取”显示', async () => {
+    const { api, user } = await startApp()
+    await deliver(api, {
+      ...fixture('nested-two-levels'),
+      nested: { '2': { fileName: 'Level 2 (middle) message.eml', error: { code: 'timeout' } } },
+    })
+    await openLevel(user)
+    const region = await screen.findByRole('region', { name: 'Notifications' })
+    expect(within(region).getByText("Couldn't open Level 2 (middle) message.eml as an email")).toBeInTheDocument()
+    expect(within(region).getByText("The attachment is damaged or can't be read.")).toBeInTheDocument()
+    expect(region.textContent).not.toContain('timed out')
+  })
+
   it('open_nested 返回之前标签页被关闭：新文档被关闭，不留下句柄', async () => {
     const { api, user } = await startApp()
     await deliver(api, 'nested-two-levels')

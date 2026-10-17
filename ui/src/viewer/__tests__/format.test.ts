@@ -57,13 +57,25 @@ describe('openFailureCategory：错误码 -> 说明类别', () => {
 })
 
 describe('operationReason', () => {
-  it('已知的错误码各有说明，崩溃和超时按“已损坏”，其余是通用说明', () => {
-    expect(operationReason('write_failed')).toBe('write_failed')
-    expect(operationReason('document_not_found')).toBe('document_not_found')
-    expect(operationReason('sidecar_crashed')).toBe('corrupted')
-    expect(operationReason('timeout')).toBe('corrupted')
-    expect(operationReason('internal_error')).toBe('generic')
-    expect(operationReason('')).toBe('generic')
+  it('已知的错误码各有说明，其余是通用说明', () => {
+    expect(operationReason('write_failed', 'saveFailed')).toBe('write_failed')
+    expect(operationReason('document_not_found', 'openFailed')).toBe('document_not_found')
+    expect(operationReason('sidecar_crashed', 'saveFailed')).toBe('corrupted')
+    expect(operationReason('sidecar_crashed', 'openNestedFailed')).toBe('corrupted')
+    expect(operationReason('internal_error', 'saveFailed')).toBe('generic')
+    expect(operationReason('', 'saveFailed')).toBe('generic')
+  })
+
+  // 保存、全部保存超时只说明没等到结果，文件可能还在写；打开附件（extractForOpen）用户没选过位置，提示重试；
+  // 打开嵌套邮件是解析，保持“已损坏”
+  it.each([
+    ['saveFailed', 'timeout'],
+    ['saveAllFailed', 'timeout'],
+    ['openFailed', 'openTimeout'],
+    ['openNestedFailed', 'corrupted'],
+    ['dialogFailed', 'corrupted'],
+  ] as const)('超时：%s -> %s', (operation, reason) => {
+    expect(operationReason('timeout', operation)).toBe(reason)
   })
 })
 

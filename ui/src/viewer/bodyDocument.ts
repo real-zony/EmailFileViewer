@@ -12,9 +12,9 @@ export const BODY_SANDBOX = 'allow-popups allow-popups-to-escape-sandbox'
 /** 默认的 CSP：阻止一切远程资源，只允许 data: 图片和字体、内联样式 */
 export const BODY_CSP_BLOCKED = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'"
 
-/** 用户对当前这封邮件选择“加载远程内容”之后：图片、样式表、字体可以来自 https: 和 http:，其余不变 */
+/** 用户对当前这封邮件选择“加载远程内容”之后：图片、样式表、字体、音视频可以来自 https: 和 http:，其余不变 */
 export const BODY_CSP_REMOTE =
-  "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:; base-uri 'none'; form-action 'none'"
+  "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:; media-src https: http:; base-uri 'none'; form-action 'none'"
 
 export function bodyCsp(remoteAllowed: boolean): string {
   return remoteAllowed ? BODY_CSP_REMOTE : BODY_CSP_BLOCKED
@@ -31,11 +31,14 @@ const CONVERTED_STYLE = 'body{margin:0;padding:22px 28px}pre{font:inherit}'
 /**
  * 拼出 iframe 的 srcdoc。`<meta http-equiv="Content-Security-Policy">` 永远是文档里的第一个元素，
  * 邮件内容在它后面原样放进 body：邮件里再带 CSP meta 也只会让限制更严，改不了它。
+ * 紧跟其后的 `x-dns-prefetch-control: off` 关掉浏览器对链接主机名的预解析：DNS 查询不受 CSP 约束，
+ * 用户同意加载之前，正文不应该让任何域名被解析。
  */
 export function buildBodyDocument(html: string | null, format: BodySourceFormat, remoteAllowed: boolean): string {
   const style = format === 'PlainText' || format === 'Rtf' ? BASE_STYLE + CONVERTED_STYLE : BASE_STYLE
   return (
     `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${bodyCsp(remoteAllowed)}">` +
+    `<meta http-equiv="x-dns-prefetch-control" content="off">` +
     `<style>${style}</style></head><body>${html ?? ''}</body></html>`
   )
 }

@@ -173,12 +173,28 @@ describe('isExecutableFileName（D6 的清单）', () => {
     'Tool.app', 'launcher.command', 'a.pkg', 'install.sh', 'a.desktop', 'x.AppImage', 'a.run',
     'a.jar', 'a.vbe', 'a.ws', 'a.wsh', 'a.psm1', 'a.psd1', 'a.ps1xml', 'a.reg', 'a.msc', 'a.scf', 'a.url', 'a.pif',
     'a.msix', 'a.msixbundle', 'a.appx', 'a.appxbundle', 'a.appinstaller', 'a.application', 'a.xll', 'a.iso', 'a.img', 'a.vhd', 'a.vhdx',
+    'a.chm', 'a.appref-ms', 'a.diagcab', 'a.settingcontent-ms', 'a.library-ms', 'a.search-ms', 'a.wsc', 'a.sct', 'a.inf', 'a.msp',
+    'tool.dmg', 'x.terminal', 'a.fileloc', 'a.inetloc', 'a.webloc', 'Setup.DMG', 'Shell.Terminal',
     'invoice.pdf.exe', '..\\..\\Windows\\evil.exe', '../../x.sh',
   ])('%s 是可执行文件', (name) => {
     expect(isExecutableFileName(name)).toBe(true)
   })
 
-  it.each(['report.pdf', 'photo.jpg', 'budget.xlsx', 'notes.txt', 'archive.zip', 'noextension', '.bashrc', 'a.exe.txt', 'a.', 'forwarded.eml'])('%s 不是', (name) => {
+  // Windows 会忽略文件名结尾的点和空格，“evil.exe.”落盘后就是 evil.exe；判断前要先去掉，与 Core 一致
+  it.each(['evil.exe.', 'evil.exe..', 'evil.exe ', 'evil.exe. ', 'evil.exe . .', 'evil.exe.\t', 'x.terminal.', 'tool.dmg ', 'dir/evil.bat.', 'C:\\tmp\\evil.ps1. '])(
+    '结尾带点或空格的 %j 仍然是可执行文件',
+    (name) => {
+      expect(isExecutableFileName(name)).toBe(true)
+    },
+  )
+
+  it.each(['report.pdf', 'photo.jpg', 'budget.xlsx', 'notes.txt', 'archive.zip', 'noextension', '.bashrc', 'a.exe.txt', 'a.', 'forwarded.eml', 'notes.txt.', 'readme. ', '...', ' ', '', 'a.dmgx', 'a.terminal.txt'])('%j 不是', (name) => {
     expect(isExecutableFileName(name)).toBe(false)
+  })
+
+  it('文件名来自邮件，结尾去点和空格对很长的点和空格串也是线性的', () => {
+    const noise = '. '.repeat(200_000)
+    expect(isExecutableFileName(`x.exe${noise}`)).toBe(true)
+    expect(isExecutableFileName(`x${noise}y`)).toBe(false)
   })
 })

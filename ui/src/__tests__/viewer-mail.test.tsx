@@ -174,6 +174,9 @@ describe('7.5 正文 iframe：沙箱、CSP、纸面', () => {
     expect(bodyDoc()).toContain(`content="${BODY_CSP_BLOCKED}"`)
     expect(BODY_CSP_BLOCKED).toBe("default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'")
     expect(bodyDoc()).not.toContain('https: http:')
+    expect(bodyDoc()).not.toContain('media-src')
+    // 关闭 DNS 预解析的 meta 紧跟在 CSP meta 之后
+    expect(bodyDoc()).toContain(`content="${BODY_CSP_BLOCKED}"><meta http-equiv="x-dns-prefetch-control" content="off">`)
   })
 
   it('srcdoc 原样包含 sidecar 已清理过的 HTML，前端不再改写它', async () => {
@@ -271,7 +274,7 @@ describe('7.5 场景“远程内容默认不加载”', () => {
     await user.click(loadButton()!)
     expect(bodyDoc()).toContain(`content="${BODY_CSP_REMOTE}"`)
     expect(BODY_CSP_REMOTE).toBe(
-      "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:; base-uri 'none'; form-action 'none'",
+      "default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline' https: http:; font-src data: https: http:; media-src https: http:; base-uri 'none'; form-action 'none'",
     )
     expect(bodyFrame()).not.toBe(before) // 重新渲染（新的 iframe）
     expect(bodyFrame().getAttribute('sandbox')).toBe(BODY_SANDBOX) // sandbox 不变
