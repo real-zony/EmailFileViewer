@@ -1,0 +1,31 @@
+{
+  "fileName": "charset-gbk.eml",
+  "document": {
+    "from": [
+      {
+        "name": "张三",
+        "address": "zhang.san@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "测试邮件：GBK 编码的中文主题",
+    "sentAtUtc": "2026-10-01T02:00:00Z",
+    "dateHeaderRaw": "Thu, 1 Oct 2026 10:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">您好，\n\n这是一封用于测试字符集解码的邮件，正文使用 GBK 编码，并且在 Content-Type 中声明了 charset=gbk。\n\n如果您能正常看到这段中文，没有出现乱码，说明解码正确。\n常用字：你好世界，邮件查看器，附件，发件人，收件人。\n\n此致\n敬礼\n</pre>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

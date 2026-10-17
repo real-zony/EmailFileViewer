@@ -1,0 +1,3 @@
+/* 营销邮件样本引用的远程样式表。远程内容被允许加载后，标题会变成红色。 */
+.efv-headline { color: #d93025 !important; letter-spacing: 1px; }
+.efv-cta { background-color: #1a73e8 !important; }

@@ -1,0 +1,31 @@
+{
+  "fileName": "smime-signed.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "S/MIME signed message",
+    "sentAtUtc": "2026-10-01T14:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 22:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">This message carries a detached S/MIME signature (multipart/signed).\nThe signature was made with a throw-away self-signed certificate, so it can never be validated.\n</pre>"
+    },
+    "attachments": [],
+    "isSigned": true,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

@@ -1,0 +1,35 @@
+.DS_Store
+
+# .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userprefs
+TestResults/
+*.log
+.vs/
+.idea/
+*.nupkg
+*.binlog
+coverage*.xml
+
+# CI 产物
+artifacts/
+
+# Node / 前端
+node_modules/
+ui/dist/
+dist-ssr/
+*.local
+npm-debug.log*
+.vite/
+*.tsbuildinfo
+
+# Rust / Tauri
+src-tauri/target/
+# sidecar 由 scripts/build-sidecar.mjs 生成，不提交
+src-tauri/binaries/
+# cargo tauri 生成的临时文件
+src-tauri/gen/schemas/

@@ -1,0 +1,15 @@
+From: Alice Zhang <alice.zhang@example.com>
+Date: Thu, 01 Oct 2026 10:00:00 +0800
+Subject: Quarterly planning meeting
+Message-Id: <headers-normal@samples.efv.invalid>
+To: Bob Li <bob.li@example.org>, Carol Wang <carol.wang@example.net>
+Cc: Dave Chen <dave.chen@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hi Bob and Carol,
+
+The quarterly planning meeting is on Friday at 14:00.
+Dave is copied for visibility.
+
+Alice

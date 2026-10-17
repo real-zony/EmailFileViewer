@@ -1,0 +1,31 @@
+{
+  "fileName": "smime-encrypted.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "S/MIME encrypted message",
+    "sentAtUtc": "2026-10-01T15:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 23:00:00 +0800",
+    "body": {
+      "sourceFormat": "None",
+      "html": null
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": true,
+    "hasRemoteContent": false
+  }
+}

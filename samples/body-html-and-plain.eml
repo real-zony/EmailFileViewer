@@ -1,0 +1,28 @@
+From: Carol Wang <carol.wang@example.net>
+Date: Thu, 01 Oct 2026 11:00:00 +0800
+Subject: HTML and plain-text alternatives
+Message-Id: <body-html-and-plain@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+PLAIN-TEXT-VERSION
+
+This is the plain-text alternative. If you can read this in the viewer, the=
+ HTML alternative was not selected.
+
+------=_efv_01
+Content-Type: text/html; charset=utf-8
+
+<html><head><meta charset="utf-8"><title>HTML version</title></head>
+<body>
+<h1>HTML-VERSION</h1>
+<p>This is the <b>HTML</b> alternative with <i>basic formatting</i> and a
+<a href="https://example.com/">link</a>.</p>
+<ul><li>First item</li><li>Second item</li></ul>
+</body></html>
+------=_efv_01--

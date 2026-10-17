@@ -1,0 +1,31 @@
+{
+  "fileName": "body-plain-only.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Bob Li",
+        "address": "bob.li@example.org"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Plain text only: paragraphs and blank lines",
+    "sentAtUtc": "2026-10-01T04:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 12:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">Hello team,\n\nThis is a plain-text-only message used to check paragraph handling.\n\nFirst paragraph: a few sentences. The second sentence is here.\nLine two of the same paragraph (a hard line break inside the paragraph).\n\n\nThird paragraph comes after TWO blank lines.\n    Indented line with four spaces.\n\tIndented line with a tab.\n\n- list item one\n- list item two\n\n&gt; quoted line one\n&gt; quoted line two\n\nCharacters that must be escaped when shown as HTML: &lt;b&gt;not bold&lt;/b&gt; &amp; \"quotes\" 'single'.\nA URL on its own line: https://example.com/path?a=1&amp;b=2\nNon-ASCII text: 中文段落，用来确认 UTF-8 纯文本也能正确显示。\n\nRegards,\nBob\n-- \nBob Li\nSample Org\n</pre>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

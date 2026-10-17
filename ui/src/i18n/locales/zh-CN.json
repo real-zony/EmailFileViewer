@@ -1,0 +1,168 @@
+{
+  "app": {
+    "name": "EmailFileViewer"
+  },
+  "common": {
+    "close": "关闭",
+    "cancel": "取消",
+    "done": "完成",
+    "show": "查看",
+    "dismiss": "关闭"
+  },
+  "toolbar": {
+    "open": "打开…",
+    "openTip": "打开邮件文件",
+    "settings": "设置",
+    "back": "返回"
+  },
+  "tabs": {
+    "label": "已打开的文件",
+    "new": "打开文件",
+    "close": "关闭标签页",
+    "closeNamed": "关闭 {{name}}"
+  },
+  "breadcrumbs": {
+    "label": "邮件层级"
+  },
+  "header": {
+    "from": "发件人",
+    "to": "收件人",
+    "cc": "抄送",
+    "bcc": "密送",
+    "replyTo": "回复至",
+    "date": "日期",
+    "more": "另外 {{n}} 人",
+    "showLess": "收起",
+    "showSubject": "显示完整主题",
+    "hideSubject": "收起"
+  },
+  "attachments": {
+    "title": "附件",
+    "summary": "{{n}} 个文件 · {{size}}",
+    "summaryOne": "1 个文件 · {{size}}",
+    "saveAll": "全部保存…",
+    "save": "保存…",
+    "saveNamed": "保存 {{name}}…",
+    "open": "打开",
+    "openMessageTip": "在当前标签页中逐层打开",
+    "emailKind": "邮件",
+    "unnamed": "未命名的附件",
+    "saveOnly": "仅可保存",
+    "showAll": "显示全部 {{n}} 个",
+    "showFewer": "收起"
+  },
+  "body": {
+    "label": "邮件内容 · 隔离显示，脚本已禁用",
+    "frame": "邮件内容",
+    "format": {
+      "html": "HTML",
+      "text": "纯文本",
+      "rtf": "RTF",
+      "none": "无正文"
+    }
+  },
+  "remote": {
+    "title": "已阻止远程图片和样式。",
+    "why": "加载后，发件人可以得知你打开了这封邮件。",
+    "load": "加载远程内容",
+    "scope": "仅对此邮件生效",
+    "loaded": "已为此邮件加载远程内容。其他邮件仍默认阻止。"
+  },
+  "signature": {
+    "signed": "已签名",
+    "notVerified": "签名未验证",
+    "about": "关于此签名",
+    "help": "这封邮件带有数字签名，但 EmailFileViewer 不验证签名，因此无法确认发件人身份，也无法确认内容未被改动。"
+  },
+  "encrypted": {
+    "badge": "已加密",
+    "title": "这封邮件已加密",
+    "body": "EmailFileViewer 无法解密 S/MIME 邮件，因此无法显示邮件内容。上方的信息在发送时未加密。如需阅读，请在装有收件人证书的邮件客户端中打开此文件。"
+  },
+  "empty": {
+    "title": "打开邮件文件",
+    "body": "把 .eml 或 .msg 文件拖到窗口任意位置，或从电脑中选择。",
+    "open": "打开文件…",
+    "orPress": "或按",
+    "privacy": "邮件只在本机读取。除非你主动选择，否则不会上传任何内容。"
+  },
+  "drop": {
+    "title_other": "松开以打开 {{count}} 个文件",
+    "body": "每个文件在单独的标签页中打开。拖入的文字和链接会被忽略。"
+  },
+  "error": {
+    "unsupported": {
+      "reason": "不支持的格式",
+      "title": "这不是受支持的邮件文件",
+      "body": "EmailFileViewer 可以打开 .eml 和 .msg 文件。无论扩展名是什么，这个文件的内容都不符合这两种格式。"
+    },
+    "corrupt": {
+      "reason": "文件已损坏",
+      "title": "这个文件已损坏",
+      "body": "文件的部分内容缺失或格式错误，无法读取邮件。如果是别人发给你的，请对方重新发送一份。"
+    },
+    "unreadable": {
+      "reason": "无法读取",
+      "title": "无法读取这个文件",
+      "body": "文件可能已被移动或删除，或者你没有打开它的权限。"
+    },
+    "generic": {
+      "reason": "出错了",
+      "title": "无法打开这个文件",
+      "body": "发生了意外错误，EmailFileViewer 没能打开这个文件。关闭此标签页后再试一次；如果仍然失败，文件可能已损坏。"
+    },
+    "tryAgain": "重试",
+    "openAnother": "打开其他文件"
+  },
+  "toast": {
+    "label": "通知",
+    "partialTitle": "已打开 {{all}} 个文件中的 {{ok}} 个",
+    "failedLine": "<file/> — {{reason}}",
+    "more": "另外 {{n}} 个",
+    "dialogFailed": "无法打开文件对话框",
+    "openNestedFailed": "无法将 {{name}} 作为邮件打开",
+    "openFailed": "无法打开 {{name}}",
+    "saveFailed": "无法保存 {{name}}",
+    "saveAllFailed": "无法保存附件",
+    "savedAll_other": "已保存 {{count}} 个附件",
+    "savedSome": "已保存 {{total}} 个附件中的 {{saved}} 个"
+  },
+  "executable": {
+    "title": "无法在此打开“{{name}}”",
+    "body": "程序和脚本可以修改你电脑上的内容，因此 EmailFileViewer 不会打开它们。你可以先保存文件，再自行决定如何处理。",
+    "extra": "只有在你信任发件人、并且确实在等这个文件时，才运行它。"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "languageHint": "更改立即生效。邮件内容不会被翻译。",
+    "appearance": "外观",
+    "mode": "模式",
+    "modeLight": "浅色",
+    "modeDark": "深色",
+    "modeSystem": "跟随系统",
+    "palette": "配色方案",
+    "selected": "已选择",
+    "appearanceHint": "只作用于应用界面。邮件始终显示在浅色底上，保持发件人设计的样子。"
+  },
+  "about": {
+    "title": "关于",
+    "version": "版本",
+    "license": "许可",
+    "licenseValue": "MIT · 免费开源",
+    "source": "源代码"
+  },
+  "reason": {
+    "write_failed": "无法写入到那里。请确认文件夹存在、你有写入权限，并且磁盘空间足够。",
+    "document_not_found": "这封邮件已经不再打开。请关闭标签页后重新打开文件。",
+    "attachment_not_found": "邮件里已经没有这个附件了。",
+    "not_nested_email": "这个附件不是邮件。",
+    "unsupported_format": "这个附件不是有效的邮件。",
+    "corrupted": "附件已损坏，或无法读取。",
+    "unreadable": "无法读取这个文件。",
+    "dialog_failed": "无法显示系统对话框。",
+    "timeout": "操作超时，文件可能仍在保存，请检查目标位置。",
+    "openTimeout": "打开附件超时，请重试。",
+    "generic": "出了点问题，请再试一次。"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "fileName": "marketing-remote-content.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Sample Shop",
+        "address": "news@shop.example.com"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Autumn Sale: up to 40% off",
+    "sentAtUtc": "2026-10-01T06:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 14:00:00 +0800",
+    "body": {
+      "sourceFormat": "Html",
+      "html": "\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Autumn Sale</title>\n\n<link href=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/marketing.css\" rel=\"stylesheet\">\n\n<link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&amp;display=swap\" rel=\"stylesheet\">\n<style type=\"text/css\">\n  @import url(\"https://fonts.googleapis.com/css2?family=Open+Sans&display=swap\");\n  @font-face { font-family: \"EfvSampleFont\"; src: url(\"https://fonts.gstatic.com/s/efvsample/v1/efv-sample.woff2\") format(\"woff2\"); }\n  body { margin: 0; padding: 0; background-color: #f4f4f4; font-family: \"EfvSampleFont\", Roboto, Arial, sans-serif; }\n  .efv-headline { color: #202124; }\n  .efv-cta { background-color: #34a853; }\n  .hero-bg { background-image: url(\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/hero.png\"); }\n</style>\n</head>\n<body style=\"margin:0;padding:0;background-color:#f4f4f4;\" background=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/hero.png\">\n<div style=\"display:none;max-height:0;overflow:hidden;\">Up to 40% off this week only.</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f4f4f4\">\n  <tr><td align=\"center\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#ffffff\" style=\"width:600px;max-width:600px;\">\n      <tr><td bgcolor=\"#1f3a5f\" style=\"padding:12px 20px;\">\n        <a href=\"https://example.com/?utm_source=newsletter\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/?utm_source=newsletter\"><img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/logo.png\" width=\"120\" height=\"40\" alt=\"Sample Shop\" style=\"display:block;border:0;\"></a>\n      </td></tr>\n      <tr><td class=\"hero-bg\">\n        <img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/hero.png\" width=\"600\" height=\"200\" alt=\"Autumn sale banner\" style=\"display:block;border:0;width:600px;height:200px;\">\n      </td></tr>\n      <tr><td style=\"padding:24px 20px 8px 20px;\">\n        <h1 class=\"efv-headline\" style=\"margin:0;font-size:28px;line-height:34px;\">Autumn Sale: up to 40% off</h1>\n      </td></tr>\n      <tr><td style=\"padding:0 20px 16px 20px;font-size:16px;line-height:24px;color:#3c4043;\">\n        Fresh picks for the new season. Prices drop this week only, while stock lasts.\n      </td></tr>\n      <tr><td style=\"padding:0 10px;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">\n          <tr>\n            <td width=\"33%\" align=\"center\" style=\"padding:10px;font-size:14px;\"><img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/product-1.png\" width=\"170\" height=\"170\" alt=\"Product one\" style=\"display:block;border:0;\"><br>Product one<br><b>$19</b></td>\n            <td width=\"33%\" align=\"center\" style=\"padding:10px;font-size:14px;\"><img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/product-2.png\" width=\"170\" height=\"170\" alt=\"Product two\" style=\"display:block;border:0;\"><br>Product two<br><b>$29</b></td>\n            <td width=\"33%\" align=\"center\" style=\"padding:10px;font-size:14px;\"><img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/product-3.png\" width=\"170\" height=\"170\" alt=\"Product three\" style=\"display:block;border:0;\"><br>Product three<br><b>$39</b></td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td align=\"center\" style=\"padding:24px;\">\n        <a class=\"efv-cta\" href=\"https://example.com/shop?utm_campaign=autumn&amp;utm_medium=email\" style=\"background-color:#34a853;color:#ffffff;padding:12px 28px;text-decoration:none;border-radius:4px;display:inline-block;font-weight:bold;\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/shop?utm_campaign=autumn&amp;utm_medium=email\">Shop now</a>\n      </td></tr>\n      <tr><td align=\"center\" style=\"padding:16px;font-size:12px;line-height:18px;color:#80868b;\">\n        <a href=\"https://example.com/social/one\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/social/one\"><img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/social-1.png\" width=\"24\" height=\"24\" alt=\"Social one\" style=\"border:0;\"></a>\n        <a href=\"https://example.com/social/two\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/social/two\"><img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/social-2.png\" width=\"24\" height=\"24\" alt=\"Social two\" style=\"border:0;\"></a>\n        <br>You are receiving this email because you subscribed on example.com.<br>\n        <a href=\"https://example.com/unsubscribe?u=0001\" style=\"color:#80868b;\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"https://example.com/unsubscribe?u=0001\">Unsubscribe</a>\n      </td></tr>\n    </table>\n  </td></tr>\n</table>\n\n<img src=\"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/pixel.gif?campaign=efv-sample&amp;uid=0001\" width=\"1\" height=\"1\" alt=\"\" style=\"display:block;border:0;width:1px;height:1px;\">\n</body>\n</html>"
+    },
+    "attachments": [],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": true
+  }
+}

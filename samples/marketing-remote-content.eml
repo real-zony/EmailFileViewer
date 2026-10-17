@@ -1,0 +1,134 @@
+From: Sample Shop <news@shop.example.com>
+Date: Thu, 01 Oct 2026 14:00:00 +0800
+Subject: Autumn Sale: up to 40% off
+Message-Id: <marketing-remote-content@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+List-Unsubscribe: <https://example.com/unsubscribe?u=0001>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+
+Autumn Sale: up to 40% off
+
+This is the plain-text version of a marketing email.
+Shop now: https://example.com/shop?utm_campaign=autumn
+
+------=_efv_01
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html>
+<html lang=3D"en">
+<head>
+<meta charset=3D"utf-8">
+<meta name=3D"viewport" content=3D"width=3Ddevice-width, initial-scale=3D1"=
+>
+<title>Autumn Sale</title>
+<!-- =E8=BF=9C=E7=A8=8B=E6=A0=B7=E5=BC=8F=E8=A1=A8 -->
+<link rel=3D"stylesheet" href=3D"https://raw.githubusercontent.com/real-zon=
+y/EmailFileViewer/main/samples/assets/marketing.css">
+<!-- =E8=BF=9C=E7=A8=8B=E5=AD=97=E4=BD=93=EF=BC=9A=E6=A0=B7=E5=BC=8F=E8=A1=A8=
+=E5=92=8C @font-face / @import -->
+<link rel=3D"stylesheet" href=3D"https://fonts.googleapis.com/css2?family=3D=
+Roboto:wght@400;700&display=3Dswap">
+<style type=3D"text/css">
+  @import url("https://fonts.googleapis.com/css2?family=3DOpen+Sans&display=
+=3Dswap");
+  @font-face { font-family: "EfvSampleFont"; src: url("https://fonts.gstati=
+c.com/s/efvsample/v1/efv-sample.woff2") format("woff2"); }
+  body { margin: 0; padding: 0; background-color: #f4f4f4; font-family: "Ef=
+vSampleFont", Roboto, Arial, sans-serif; }
+  .efv-headline { color: #202124; }
+  .efv-cta { background-color: #34a853; }
+  .hero-bg { background-image: url("https://raw.githubusercontent.com/real-=
+zony/EmailFileViewer/main/samples/assets/hero.png"); }
+</style>
+</head>
+<body style=3D"margin:0;padding:0;background-color:#f4f4f4;" background=3D"=
+https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/as=
+sets/hero.png">
+<div style=3D"display:none;max-height:0;overflow:hidden;">Up to 40% off thi=
+s week only.</div>
+<table role=3D"presentation" width=3D"100%" cellpadding=3D"0" cellspacing=3D=
+"0" border=3D"0" bgcolor=3D"#f4f4f4">
+  <tr><td align=3D"center">
+    <table role=3D"presentation" width=3D"600" cellpadding=3D"0" cellspacin=
+g=3D"0" border=3D"0" bgcolor=3D"#ffffff" style=3D"width:600px;max-width:600=
+px;">
+      <tr><td bgcolor=3D"#1f3a5f" style=3D"padding:12px 20px;">
+        <a href=3D"https://example.com/?utm_source=3Dnewsletter"><img src=3D=
+"https://raw.githubusercontent.com/real-zony/EmailFileViewer/main/samples/a=
+ssets/logo.png" width=3D"120" height=3D"40" alt=3D"Sample Shop" style=3D"di=
+splay:block;border:0;"></a>
+      </td></tr>
+      <tr><td class=3D"hero-bg">
+        <img src=3D"https://raw.githubusercontent.com/real-zony/EmailFileVi=
+ewer/main/samples/assets/hero.png" width=3D"600" height=3D"200" alt=3D"Autu=
+mn sale banner" style=3D"display:block;border:0;width:600px;height:200px;">
+      </td></tr>
+      <tr><td style=3D"padding:24px 20px 8px 20px;">
+        <h1 class=3D"efv-headline" style=3D"margin:0;font-size:28px;line-he=
+ight:34px;">Autumn Sale: up to 40% off</h1>
+      </td></tr>
+      <tr><td style=3D"padding:0 20px 16px 20px;font-size:16px;line-height:=
+24px;color:#3c4043;">
+        Fresh picks for the new season. Prices drop this week only, while s=
+tock lasts.
+      </td></tr>
+      <tr><td style=3D"padding:0 10px;">
+        <table role=3D"presentation" width=3D"100%" cellpadding=3D"0" cells=
+pacing=3D"0" border=3D"0">
+          <tr>
+            <td width=3D"33%" align=3D"center" style=3D"padding:10px;font-s=
+ize:14px;"><img src=3D"https://raw.githubusercontent.com/real-zony/EmailFil=
+eViewer/main/samples/assets/product-1.png" width=3D"170" height=3D"170" alt=
+=3D"Product one" style=3D"display:block;border:0;"><br>Product one<br><b>$1=
+9</b></td>
+            <td width=3D"33%" align=3D"center" style=3D"padding:10px;font-s=
+ize:14px;"><img src=3D"https://raw.githubusercontent.com/real-zony/EmailFil=
+eViewer/main/samples/assets/product-2.png" width=3D"170" height=3D"170" alt=
+=3D"Product two" style=3D"display:block;border:0;"><br>Product two<br><b>$2=
+9</b></td>
+            <td width=3D"33%" align=3D"center" style=3D"padding:10px;font-s=
+ize:14px;"><img src=3D"https://raw.githubusercontent.com/real-zony/EmailFil=
+eViewer/main/samples/assets/product-3.png" width=3D"170" height=3D"170" alt=
+=3D"Product three" style=3D"display:block;border:0;"><br>Product three<br><=
+b>$39</b></td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td align=3D"center" style=3D"padding:24px;">
+        <a class=3D"efv-cta" href=3D"https://example.com/shop?utm_campaign=3D=
+autumn&amp;utm_medium=3Demail" style=3D"background-color:#34a853;color:#fff=
+fff;padding:12px 28px;text-decoration:none;border-radius:4px;display:inline=
+-block;font-weight:bold;">Shop now</a>
+      </td></tr>
+      <tr><td align=3D"center" style=3D"padding:16px;font-size:12px;line-he=
+ight:18px;color:#80868b;">
+        <a href=3D"https://example.com/social/one"><img src=3D"https://raw.=
+githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/social-=
+1.png" width=3D"24" height=3D"24" alt=3D"Social one" style=3D"border:0;"></=
+a>
+        <a href=3D"https://example.com/social/two"><img src=3D"https://raw.=
+githubusercontent.com/real-zony/EmailFileViewer/main/samples/assets/social-=
+2.png" width=3D"24" height=3D"24" alt=3D"Social two" style=3D"border:0;"></=
+a>
+        <br>You are receiving this email because you subscribed on example.=
+com.<br>
+        <a href=3D"https://example.com/unsubscribe?u=3D0001" style=3D"color=
+:#80868b;">Unsubscribe</a>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+<!-- =E8=BF=BD=E8=B8=AA=E5=83=8F=E7=B4=A0 -->
+<img src=3D"https://raw.githubusercontent.com/real-zony/EmailFileViewer/mai=
+n/samples/assets/pixel.gif?campaign=3Defv-sample&amp;uid=3D0001" width=3D"1=
+" height=3D"1" alt=3D"" style=3D"display:block;border:0;width:1px;height:1p=
+x;">
+</body>
+</html>=
+
+------=_efv_01--

@@ -1,0 +1,65 @@
+From: Carol Wang <carol.wang@example.net>
+Date: Thu, 01 Oct 2026 18:00:00 +0800
+Subject: Attachments with unsafe file names
+Message-Id: <attachments-unsafe-names@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Every attachment has harmless placeholder text. Only the file names are hos=
+tile.
+
+------=_efv_01
+Content-Type: text/plain; name="../../.bashrc"
+Content-Disposition: attachment; filename="../../.bashrc"
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name ../../.bashrc
+
+------=_efv_01
+Content-Type: text/plain; name="..\\..\\Windows\\evil.txt"
+Content-Disposition: attachment; filename="..\\..\\Windows\\evil.txt"
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name ..\..\Windows\evil.txt
+
+------=_efv_01
+Content-Type: text/plain; name="/tmp/absolute-path.txt"
+Content-Disposition: attachment; filename="/tmp/absolute-path.txt"
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name /tmp/absolute-path.txt
+
+------=_efv_01
+Content-Type: text/plain; name=CON.txt
+Content-Disposition: attachment; filename=CON.txt
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name CON.txt
+
+------=_efv_01
+Content-Type: text/plain; name=NUL
+Content-Disposition: attachment; filename=NUL
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name NUL
+
+------=_efv_01
+Content-Type: text/plain; name="a:b*c?.txt"
+Content-Disposition: attachment; filename="a:b*c?.txt"
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name a:b*c?.txt
+
+------=_efv_01
+Content-Type: text/plain; name="x<y>z|w.txt"
+Content-Disposition: attachment; filename="x<y>z|w.txt"
+Content-Transfer-Encoding: 7bit
+
+Harmless placeholder for the file name x<y>z|w.txt
+
+------=_efv_01--

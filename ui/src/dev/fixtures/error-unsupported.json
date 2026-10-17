@@ -1,0 +1,7 @@
+{
+  "fileName": "not-an-email.png",
+  "error": {
+    "code": "unsupported_format",
+    "message": "文件开头含有 NUL 字节，是二进制文件，不是邮件。"
+  }
+}

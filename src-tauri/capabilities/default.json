@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions of the main window (local origin only). Opening files, saving attachments, external links and the native menu are handled in Rust; the dialog and opener plugins are not exposed to the frontend.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": [
+    "allow-app-ready",
+    "allow-open-with-dialog",
+    "allow-open-nested",
+    "allow-close-document",
+    "allow-save-attachment",
+    "allow-save-all-attachments",
+    "allow-open-attachment",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-set-theme",
+    "core:window:allow-set-title",
+    "core:window:allow-set-background-color",
+    "core:webview:allow-set-webview-background-color",
+    "store:allow-load",
+    "store:allow-set",
+    "store:allow-save"
+  ]
+}

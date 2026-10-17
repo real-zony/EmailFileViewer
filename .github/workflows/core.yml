@@ -1,0 +1,124 @@
+name: core
+
+# 只在 .NET 解析核心相关的内容变化时运行
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'core/**'
+      - 'samples/**'
+      - 'global.json'
+      - '.github/workflows/core.yml'
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'samples/**'
+      - 'global.json'
+      - '.github/workflows/core.yml'
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  core:
+    name: core (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            exe: '.exe'
+          # Linux 固定用 22.04：在较旧的系统上编出来的程序才能在更多发行版上运行
+          - os: ubuntu-22.04
+            rid: linux-x64
+            exe: ''
+          - os: macos-latest
+            rid: osx-arm64
+            exe: ''
+          - os: macos-15-intel
+            rid: osx-x64
+            exe: ''
+    env:
+      SIDECAR_DIR: artifacts/sidecar/${{ matrix.rid }}
+      SIDECAR_EXE: artifacts/sidecar/${{ matrix.rid }}/EmailFileViewer.Sidecar${{ matrix.exe }}
+    defaults:
+      run:
+        # Windows 上默认是 PowerShell，统一用 bash 让脚本在四个平台上一致
+        shell: bash
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # NativeAOT 在 Linux 上需要 clang 和 zlib 头文件
+      - name: 安装 NativeAOT 的 Linux 依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      # GitHubActions logger 把失败的测试写成 check-run annotation，不用下载日志就能看到失败原因；
+      # trx 是补充：每个测试项目一份，失败时随下面的步骤上传
+      - name: 运行单元测试
+        run: dotnet test core -c Release --logger GitHubActions --logger trx --results-directory artifacts/TestResults
+
+      - name: 上传测试结果（测试失败时）
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.rid }}
+          path: artifacts/TestResults
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: 发布 sidecar（NativeAOT）
+        run: dotnet publish core/src/EmailFileViewer.Sidecar -c Release -r ${{ matrix.rid }} -o "$SIDECAR_DIR"
+
+      # 退出码非 0 时步骤失败
+      - name: 运行 smoke
+        run: '"$SIDECAR_EXE" --smoke samples'
+
+      - name: 检查依赖（Linux）
+        if: runner.os == 'Linux'
+        run: |
+          # 先存进变量再 grep，避免管道提前关闭导致 ldd 被 SIGPIPE 终止而误判
+          deps="$(ldd "$SIDECAR_EXE")"
+          echo "$deps"
+          if grep -qi 'libicu' <<< "$deps"; then
+            echo "::error::sidecar 动态链接了 libicu，InvariantGlobalization 没有生效"
+            exit 1
+          fi
+
+          # ldd 只能看到链接时依赖，再用 LD_DEBUG 确认运行时没有 dlopen 加载 ICU
+          LD_DEBUG=libs "$SIDECAR_EXE" --smoke samples > /dev/null 2> ld-debug.log
+          if grep -E 'calling init: .*libicu' ld-debug.log; then
+            echo "::error::sidecar 运行时加载了 libicu"
+            exit 1
+          fi
+          echo "未发现 libicu"
+
+      - name: 检查依赖（macOS）
+        if: runner.os == 'macOS'
+        run: otool -L "$SIDECAR_EXE"
+
+      # 只上传可执行文件，不上传 .dSYM、.pdb、.dbg 等调试符号
+      # 注意：artifact 压缩包不保留文件的可执行权限，Linux 和 macOS 下载后需要 chmod +x
+      - name: 上传 sidecar
+        uses: actions/upload-artifact@v7
+        with:
+          name: sidecar-${{ matrix.rid }}
+          path: ${{ env.SIDECAR_EXE }}
+          if-no-files-found: error
+          retention-days: 7

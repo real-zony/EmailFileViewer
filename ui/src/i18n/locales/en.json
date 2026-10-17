@@ -1,0 +1,170 @@
+{
+  "app": {
+    "name": "EmailFileViewer"
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "done": "Done",
+    "show": "Show",
+    "dismiss": "Dismiss"
+  },
+  "toolbar": {
+    "open": "Open…",
+    "openTip": "Open email files",
+    "settings": "Settings",
+    "back": "Back"
+  },
+  "tabs": {
+    "label": "Open files",
+    "new": "Open file",
+    "close": "Close tab",
+    "closeNamed": "Close {{name}}"
+  },
+  "breadcrumbs": {
+    "label": "Message levels"
+  },
+  "header": {
+    "from": "From",
+    "to": "To",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "replyTo": "Reply to",
+    "date": "Date",
+    "more": "+{{n}} more",
+    "showLess": "Show less",
+    "showSubject": "Show full subject",
+    "hideSubject": "Show less"
+  },
+  "attachments": {
+    "title": "Attachments",
+    "summary": "{{n}} files · {{size}}",
+    "summaryOne": "1 file · {{size}}",
+    "saveAll": "Save all…",
+    "save": "Save…",
+    "saveNamed": "Save {{name}}…",
+    "open": "Open",
+    "openMessageTip": "Opens here, in a new level of this tab",
+    "emailKind": "Email",
+    "unnamed": "Unnamed attachment",
+    "saveOnly": "Save only",
+    "showAll": "Show all {{n}}",
+    "showFewer": "Show fewer"
+  },
+  "body": {
+    "label": "Message content · shown in isolation, scripts off",
+    "frame": "Message content",
+    "format": {
+      "html": "HTML",
+      "text": "Plain text",
+      "rtf": "RTF",
+      "none": "No body"
+    }
+  },
+  "remote": {
+    "title": "Remote images and styles are blocked.",
+    "why": "Loading them lets the sender see that you opened this message.",
+    "load": "Load remote content",
+    "scope": "This message only",
+    "loaded": "Remote content is loaded for this message. Other messages still block it."
+  },
+  "signature": {
+    "signed": "Signed",
+    "notVerified": "signature not verified",
+    "about": "About this signature",
+    "help": "This message has a digital signature, but EmailFileViewer doesn't check signatures. It can't confirm who sent the message or that it wasn't changed."
+  },
+  "encrypted": {
+    "badge": "Encrypted",
+    "title": "This message is encrypted",
+    "body": "EmailFileViewer can't decrypt S/MIME messages, so the content can't be shown. The details above were sent unencrypted. To read it, open the file in a mail app that has the recipient's certificate."
+  },
+  "empty": {
+    "title": "Open an email file",
+    "body": "Drop .eml or .msg files anywhere in this window, or choose them from your computer.",
+    "open": "Open file…",
+    "orPress": "or press",
+    "privacy": "Messages are read on this computer. Nothing is uploaded unless you choose to."
+  },
+  "drop": {
+    "title_one": "Release to open {{count}} file",
+    "title_other": "Release to open {{count}} files",
+    "body": "Each file opens in its own tab. Text and links are ignored."
+  },
+  "error": {
+    "unsupported": {
+      "reason": "Unsupported format",
+      "title": "This file isn't a supported email",
+      "body": "EmailFileViewer opens .eml and .msg files. This file's contents don't match either format, whatever its extension says."
+    },
+    "corrupt": {
+      "reason": "Damaged file",
+      "title": "This file is damaged",
+      "body": "Parts of the file are missing or malformed, so the message can't be read. If someone sent it to you, ask them for a new copy."
+    },
+    "unreadable": {
+      "reason": "Can't read file",
+      "title": "This file can't be read",
+      "body": "It may have been moved or deleted, or you may not have permission to open it."
+    },
+    "generic": {
+      "reason": "Something went wrong",
+      "title": "This file couldn't be opened",
+      "body": "An unexpected error stopped EmailFileViewer from opening this file. Close this tab and try again; if it keeps happening, the file may be damaged."
+    },
+    "tryAgain": "Try again",
+    "openAnother": "Open another file"
+  },
+  "toast": {
+    "label": "Notifications",
+    "partialTitle": "Opened {{ok}} of {{all}} files",
+    "failedLine": "<file/> — {{reason}}",
+    "more": "+{{n}} more",
+    "dialogFailed": "Couldn't open the file dialog",
+    "openNestedFailed": "Couldn't open {{name}} as an email",
+    "openFailed": "Couldn't open {{name}}",
+    "saveFailed": "Couldn't save {{name}}",
+    "saveAllFailed": "Couldn't save the attachments",
+    "savedAll_one": "Saved {{count}} attachment",
+    "savedAll_other": "Saved {{count}} attachments",
+    "savedSome": "Saved {{saved}} of {{total}} attachments"
+  },
+  "executable": {
+    "title": "“{{name}}” can't be opened here",
+    "body": "Programs and scripts can change things on your computer, so EmailFileViewer won't open them. You can save the file and decide what to do with it yourself.",
+    "extra": "Run it only if you trust the sender and were expecting this file."
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageHint": "Changes apply right away. Email content is never translated.",
+    "appearance": "Appearance",
+    "mode": "Mode",
+    "modeLight": "Light",
+    "modeDark": "Dark",
+    "modeSystem": "Match system",
+    "palette": "Colour scheme",
+    "selected": "Selected",
+    "appearanceHint": "Applies to the app only. Messages always appear on a light page, the way the sender designed them."
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "license": "License",
+    "licenseValue": "MIT · free and open source",
+    "source": "Source code"
+  },
+  "reason": {
+    "write_failed": "It couldn't be written there. Check that the folder exists, that you have permission to write to it, and that the disk isn't full.",
+    "document_not_found": "This message is no longer open. Close the tab and open the file again.",
+    "attachment_not_found": "This attachment isn't in the message any more.",
+    "not_nested_email": "This attachment isn't an email.",
+    "unsupported_format": "This attachment isn't a valid email.",
+    "corrupted": "The attachment is damaged or can't be read.",
+    "unreadable": "The file can't be read.",
+    "dialog_failed": "The system dialog could not be shown.",
+    "timeout": "The operation timed out. The file may still be saving, so check the destination.",
+    "openTimeout": "Opening the attachment timed out. Try again.",
+    "generic": "Something went wrong. Try again."
+  }
+}

@@ -1,0 +1,183 @@
+From: Link Tester <links@example.com>
+Date: Fri, 02 Oct 2026 01:00:00 +0800
+Subject: Links: anchors and schemes
+Message-Id: <links-anchors-and-schemes@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+
+Open this message in the viewer and click every link in the HTML version.
+Expected behavior is listed in samples/README.md.
+
+------=_efv_01
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<html>
+<head><meta charset=3D"utf-8"><title>Links: anchors and schemes</title></he=
+ad>
+<body>
+<h1>Links: anchors and schemes</h1>
+<h2>Table of contents</h2>
+<ol>
+<li><a href=3D"#section-1">Section 1</a></li>
+<li><a href=3D"#section-2">Section 2</a></li>
+<li><a href=3D"#section-3">Section 3</a></li>
+<li><a href=3D"#section-4">Section 4</a></li>
+<li><a href=3D"#bottom" target=3D"_blank">Bottom (this anchor carries targe=
+t=3D"_blank")</a></li>
+</ol>
+<h2>Link kinds</h2>
+<ul>
+<li><a href=3D"https://example.com/page">https link</a></li>
+<li><a href=3D"http://example.com/plain">http link</a></li>
+<li><a href=3D"mailto:someone@example.com">mailto link</a></li>
+<li><a href=3D"tel:+10000000000">tel link</a></li>
+<li><a href=3D"file:///etc/hosts">file link</a></li>
+<li><a href=3D"page.html">relative link: page.html</a></li>
+<li><a href=3D"?x=3D1">relative link: ?x=3D1</a></li>
+<li><a href=3D"/root">relative link: /root</a></li>
+<li><a href=3D"">empty link: href=3D""</a></li>
+</ul>
+<h2>SVG links</h2>
+<svg width=3D"360" height=3D"70" xmlns=3D"http://www.w3.org/2000/svg" xmlns=
+:xlink=3D"http://www.w3.org/1999/xlink">
+<a xlink:href=3D"#section-2"><text x=3D"10" y=3D"25" fill=3D"#06c">SVG link=
+ to #section-2 (xlink:href)</text></a>
+<a href=3D"https://example.com/svg"><text x=3D"10" y=3D"55" fill=3D"#06c">S=
+VG link to https://example.com/svg (href)</text></a>
+</svg>
+<h2>Image map</h2>
+<p>The image below has one clickable area.</p>
+<map name=3D"efv-map"><area shape=3D"rect" coords=3D"0,0,160,48" href=3D"ht=
+tps://example.com/area" alt=3D"area link"></map>
+<img src=3D"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfF=
+cSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=3D=3D" width=3D"160" =
+height=3D"48" usemap=3D"#efv-map" alt=3D"image map">
+<h2>Sections</h2>
+<p id=3D"section-1" style=3D"min-height:420px;border-left:4px solid #888;pa=
+dding-left:12px;margin:0 0 32px 0;"><b>SECTION-1-MARKER</b> This sentence o=
+nly exists to make the paragraph long enough that scrolling to it is clearl=
+y visible. This sentence only exists to make the paragraph long enough that=
+ scrolling to it is clearly visible. This sentence only exists to make the =
+paragraph long enough that scrolling to it is clearly visible. This sentenc=
+e only exists to make the paragraph long enough that scrolling to it is cle=
+arly visible. This sentence only exists to make the paragraph long enough t=
+hat scrolling to it is clearly visible. This sentence only exists to make t=
+he paragraph long enough that scrolling to it is clearly visible. This sent=
+ence only exists to make the paragraph long enough that scrolling to it is =
+clearly visible. This sentence only exists to make the paragraph long enoug=
+h that scrolling to it is clearly visible. This sentence only exists to mak=
+e the paragraph long enough that scrolling to it is clearly visible. This s=
+entence only exists to make the paragraph long enough that scrolling to it =
+is clearly visible. This sentence only exists to make the paragraph long en=
+ough that scrolling to it is clearly visible. This sentence only exists to =
+make the paragraph long enough that scrolling to it is clearly visible. Thi=
+s sentence only exists to make the paragraph long enough that scrolling to =
+it is clearly visible. This sentence only exists to make the paragraph long=
+ enough that scrolling to it is clearly visible. This sentence only exists =
+to make the paragraph long enough that scrolling to it is clearly visible. =
+This sentence only exists to make the paragraph long enough that scrolling =
+to it is clearly visible. This sentence only exists to make the paragraph l=
+ong enough that scrolling to it is clearly visible. This sentence only exis=
+ts to make the paragraph long enough that scrolling to it is clearly visibl=
+e. This sentence only exists to make the paragraph long enough that scrolli=
+ng to it is clearly visible. This sentence only exists to make the paragrap=
+h long enough that scrolling to it is clearly visible. </p>
+<p id=3D"section-2" style=3D"min-height:420px;border-left:4px solid #888;pa=
+dding-left:12px;margin:0 0 32px 0;"><b>SECTION-2-MARKER</b> This sentence o=
+nly exists to make the paragraph long enough that scrolling to it is clearl=
+y visible. This sentence only exists to make the paragraph long enough that=
+ scrolling to it is clearly visible. This sentence only exists to make the =
+paragraph long enough that scrolling to it is clearly visible. This sentenc=
+e only exists to make the paragraph long enough that scrolling to it is cle=
+arly visible. This sentence only exists to make the paragraph long enough t=
+hat scrolling to it is clearly visible. This sentence only exists to make t=
+he paragraph long enough that scrolling to it is clearly visible. This sent=
+ence only exists to make the paragraph long enough that scrolling to it is =
+clearly visible. This sentence only exists to make the paragraph long enoug=
+h that scrolling to it is clearly visible. This sentence only exists to mak=
+e the paragraph long enough that scrolling to it is clearly visible. This s=
+entence only exists to make the paragraph long enough that scrolling to it =
+is clearly visible. This sentence only exists to make the paragraph long en=
+ough that scrolling to it is clearly visible. This sentence only exists to =
+make the paragraph long enough that scrolling to it is clearly visible. Thi=
+s sentence only exists to make the paragraph long enough that scrolling to =
+it is clearly visible. This sentence only exists to make the paragraph long=
+ enough that scrolling to it is clearly visible. This sentence only exists =
+to make the paragraph long enough that scrolling to it is clearly visible. =
+This sentence only exists to make the paragraph long enough that scrolling =
+to it is clearly visible. This sentence only exists to make the paragraph l=
+ong enough that scrolling to it is clearly visible. This sentence only exis=
+ts to make the paragraph long enough that scrolling to it is clearly visibl=
+e. This sentence only exists to make the paragraph long enough that scrolli=
+ng to it is clearly visible. This sentence only exists to make the paragrap=
+h long enough that scrolling to it is clearly visible. </p>
+<p id=3D"section-3" style=3D"min-height:420px;border-left:4px solid #888;pa=
+dding-left:12px;margin:0 0 32px 0;"><b>SECTION-3-MARKER</b> This sentence o=
+nly exists to make the paragraph long enough that scrolling to it is clearl=
+y visible. This sentence only exists to make the paragraph long enough that=
+ scrolling to it is clearly visible. This sentence only exists to make the =
+paragraph long enough that scrolling to it is clearly visible. This sentenc=
+e only exists to make the paragraph long enough that scrolling to it is cle=
+arly visible. This sentence only exists to make the paragraph long enough t=
+hat scrolling to it is clearly visible. This sentence only exists to make t=
+he paragraph long enough that scrolling to it is clearly visible. This sent=
+ence only exists to make the paragraph long enough that scrolling to it is =
+clearly visible. This sentence only exists to make the paragraph long enoug=
+h that scrolling to it is clearly visible. This sentence only exists to mak=
+e the paragraph long enough that scrolling to it is clearly visible. This s=
+entence only exists to make the paragraph long enough that scrolling to it =
+is clearly visible. This sentence only exists to make the paragraph long en=
+ough that scrolling to it is clearly visible. This sentence only exists to =
+make the paragraph long enough that scrolling to it is clearly visible. Thi=
+s sentence only exists to make the paragraph long enough that scrolling to =
+it is clearly visible. This sentence only exists to make the paragraph long=
+ enough that scrolling to it is clearly visible. This sentence only exists =
+to make the paragraph long enough that scrolling to it is clearly visible. =
+This sentence only exists to make the paragraph long enough that scrolling =
+to it is clearly visible. This sentence only exists to make the paragraph l=
+ong enough that scrolling to it is clearly visible. This sentence only exis=
+ts to make the paragraph long enough that scrolling to it is clearly visibl=
+e. This sentence only exists to make the paragraph long enough that scrolli=
+ng to it is clearly visible. This sentence only exists to make the paragrap=
+h long enough that scrolling to it is clearly visible. </p>
+<p id=3D"section-4" style=3D"min-height:420px;border-left:4px solid #888;pa=
+dding-left:12px;margin:0 0 32px 0;"><b>SECTION-4-MARKER</b> This sentence o=
+nly exists to make the paragraph long enough that scrolling to it is clearl=
+y visible. This sentence only exists to make the paragraph long enough that=
+ scrolling to it is clearly visible. This sentence only exists to make the =
+paragraph long enough that scrolling to it is clearly visible. This sentenc=
+e only exists to make the paragraph long enough that scrolling to it is cle=
+arly visible. This sentence only exists to make the paragraph long enough t=
+hat scrolling to it is clearly visible. This sentence only exists to make t=
+he paragraph long enough that scrolling to it is clearly visible. This sent=
+ence only exists to make the paragraph long enough that scrolling to it is =
+clearly visible. This sentence only exists to make the paragraph long enoug=
+h that scrolling to it is clearly visible. This sentence only exists to mak=
+e the paragraph long enough that scrolling to it is clearly visible. This s=
+entence only exists to make the paragraph long enough that scrolling to it =
+is clearly visible. This sentence only exists to make the paragraph long en=
+ough that scrolling to it is clearly visible. This sentence only exists to =
+make the paragraph long enough that scrolling to it is clearly visible. Thi=
+s sentence only exists to make the paragraph long enough that scrolling to =
+it is clearly visible. This sentence only exists to make the paragraph long=
+ enough that scrolling to it is clearly visible. This sentence only exists =
+to make the paragraph long enough that scrolling to it is clearly visible. =
+This sentence only exists to make the paragraph long enough that scrolling =
+to it is clearly visible. This sentence only exists to make the paragraph l=
+ong enough that scrolling to it is clearly visible. This sentence only exis=
+ts to make the paragraph long enough that scrolling to it is clearly visibl=
+e. This sentence only exists to make the paragraph long enough that scrolli=
+ng to it is clearly visible. This sentence only exists to make the paragrap=
+h long enough that scrolling to it is clearly visible. </p>
+<p id=3D"bottom" style=3D"min-height:420px;border-left:4px solid #888;paddi=
+ng-left:12px;margin:0;"><b>BOTTOM-MARKER</b> This is the last paragraph. <a=
+ href=3D"#">Back to the top (href=3D"#")</a></p>
+</body>
+</html>=
+
+------=_efv_01--

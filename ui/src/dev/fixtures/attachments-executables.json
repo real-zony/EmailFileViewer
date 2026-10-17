@@ -1,0 +1,74 @@
+{
+  "fileName": "attachments-executables.eml",
+  "document": {
+    "from": [
+      {
+        "name": "Erin Xu",
+        "address": "erin.xu@example.org"
+      }
+    ],
+    "to": [
+      {
+        "name": "Alice Zhang",
+        "address": "alice.zhang@example.com"
+      }
+    ],
+    "cc": [],
+    "bcc": [],
+    "replyTo": [],
+    "subject": "Executable and script attachments (placeholders)",
+    "sentAtUtc": "2026-10-01T12:00:00Z",
+    "dateHeaderRaw": "Thu, 01 Oct 2026 20:00:00 +0800",
+    "body": {
+      "sourceFormat": "PlainText",
+      "html": "<pre style=\"margin:0;white-space:pre-wrap;overflow-wrap:anywhere;\">Each attachment is plain text. None of them is a real executable or script.\n</pre>"
+    },
+    "attachments": [
+      {
+        "id": "2",
+        "fileName": "installer.exe",
+        "size": 64,
+        "mimeType": "application/x-msdownload",
+        "isNestedEmail": false
+      },
+      {
+        "id": "3",
+        "fileName": "run-me.bat",
+        "size": 61,
+        "mimeType": "application/x-bat",
+        "isNestedEmail": false
+      },
+      {
+        "id": "4",
+        "fileName": "setup.ps1",
+        "size": 60,
+        "mimeType": "text/plain",
+        "isNestedEmail": false
+      },
+      {
+        "id": "5",
+        "fileName": "install.sh",
+        "size": 61,
+        "mimeType": "application/x-sh",
+        "isNestedEmail": false
+      },
+      {
+        "id": "6",
+        "fileName": "launcher.command",
+        "size": 67,
+        "mimeType": "application/octet-stream",
+        "isNestedEmail": false
+      },
+      {
+        "id": "7",
+        "fileName": "Tool.app",
+        "size": 59,
+        "mimeType": "application/octet-stream",
+        "isNestedEmail": false
+      }
+    ],
+    "isSigned": false,
+    "isEncrypted": false,
+    "hasRemoteContent": false
+  }
+}

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 打开裁剪、单文件和 AOT 分析器，让不兼容 NativeAOT 的调用在构建时就能看到警告 -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MimeKit" />
+    <PackageReference Include="MsgReader" />
+    <PackageReference Include="OpenMcdf" />
+    <PackageReference Include="RtfPipe" />
+    <!-- 不透明签名的邮件：只用 SignedCms.Decode 取出被签名的内容，不验证签名（版本固定在 Directory.Packages.props） -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <PackageReference Include="UTF.Unknown" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 格式识别、字符集判断等内部逻辑直接用字节数组做单元测试 -->
+    <InternalsVisibleTo Include="EmailFileViewer.Core.Tests" />
+  </ItemGroup>
+
+</Project>

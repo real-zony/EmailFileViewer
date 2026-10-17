@@ -1,0 +1,21 @@
+From: Alice Zhang <alice.zhang@example.com>
+Date: Thu, 01 Oct 2026 23:00:00 +0800
+Subject: S/MIME encrypted message
+Message-Id: <smime-encrypted@samples.efv.invalid>
+To: Bob Li <bob.li@example.org>
+MIME-Version: 1.0
+Content-Type: application/pkcs7-mime; smime-type=enveloped-data;
+	name=smime.p7m
+Content-Disposition: attachment; filename=smime.p7m
+Content-Transfer-Encoding: base64
+
+MIAGCSqGSIb3DQEHA6CAMIACAQAxggFsMIIBaAIBADBQMEQxJjAkBgkqhkiG9w0BCQEWF2FsaWNl
+LnpoYW5nQGV4YW1wbGUuY29tMRowGAYDVQQDExFFRlYgU2FtcGxlIFNpZ25lcgIIIZrxqXWx+ZQw
+DQYJKoZIhvcNAQEBBQAEggEASfMm3qjhsQPaEex8soQRRL4+pEbZLf49F9cdcUyai0Dqd1eyjV9s
+BlgZG+Sjm4BuWqjEh5wNL/DqbXpIQVeVAa0uNf4OAToNXyD6r7tN9qigUymdWlCT1wPf3wXc46eD
+GKqrFP6YeMeJeGo4So9wjASuho0iDNnDUebMxyXbwpaVi/4uPC3mjWFFlPFtv2Pp87psZFHiH7mP
+3R7DFRjNmlRfuaiwjMZXM4Fxk5d2ESDvdVnYaKwzvJ0dPUyU8tDRb5i9vpeK4PQeWiZIYTRdZ8xi
+qnC7oGf4c2BKX4+eR/f12bfWajlBzkKLt65j+g04NV47hivn/VjguGiZBclMqjCABgkqhkiG9w0B
+BwEwFAYIKoZIhvcNAwcECMitWwf1tG/tgHDtT/ezw8n+AYmDEXaX5CvFMgfsXxiAgw7WzKXhAY2w
+GP9r6CRoO8hLQbMsowNoSBXJRBa/4V1xyFgRCP3lvnjfKuPUm4wSCjJAvxwa9lGyiTtw/ak9HRzg
+QIc4Fa0am5gd6oUk3hYnK39+UqpHpH7cAAAAAAAAAAA=

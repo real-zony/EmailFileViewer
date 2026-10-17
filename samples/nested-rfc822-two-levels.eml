@@ -1,0 +1,61 @@
+From: Bob Li <bob.li@example.org>
+Date: Thu, 01 Oct 2026 10:00:00 +0800
+Subject: Level 1 (outer) message with two nested levels
+Message-Id: <nested-outer@samples.efv.invalid>
+To: Alice Zhang <alice.zhang@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_efv_01"
+
+------=_efv_01
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+This is the outer message (level 1). It carries the level 2 message as a me=
+ssage/rfc822 part.
+
+------=_efv_01
+Content-Type: message/rfc822
+
+From: Carol Wang <carol.wang@example.net>
+Date: Thu, 01 Oct 2026 09:00:00 +0800
+Subject: Level 2 (middle) message
+Message-Id: <nested-middle@samples.efv.invalid>
+To: Bob Li <bob.li@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_efv_02"
+
+------=_efv_02
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+This is the middle message (level 2). It carries the level 3 message as a m=
+essage/rfc822 part.
+
+------=_efv_02
+Content-Type: message/rfc822
+
+From: Dave Chen <dave.chen@example.com>
+Date: Thu, 01 Oct 2026 08:00:00 +0800
+Subject: Level 3 (innermost) message
+Message-Id: <nested-inner@samples.efv.invalid>
+To: Carol Wang <carol.wang@example.net>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_efv_03"
+
+------=_efv_03
+Content-Type: text/plain; charset=utf-8
+
+This is the innermost message (level 3). It has its own attachment.
+
+------=_efv_03
+Content-Type: text/plain; name=level3-note.txt
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=level3-note.txt
+
+Attachment inside the innermost message.
+
+------=_efv_03--
+
+------=_efv_02--
+
+------=_efv_01--
