@@ -153,6 +153,8 @@ jobs:
       - name: 运行解析核心的单元测试
         run: dotnet test core -c Release
 
+      # 这一次 smoke 是为了尽早失败，省下后面十几分钟的打包。注意：Tauri 的 beforeBuildCommand 会把 sidecar 重新发布一遍
+      # 并覆盖这个文件，打进安装包的是重新发布的那份，所以构建之后还要对它再测一次（见“检查安装包里的 sidecar”）
       - name: 发布 sidecar 并运行 smoke
         run: |
           node scripts/build-sidecar.mjs ${{ matrix.target }}
@@ -160,7 +162,10 @@ jobs:
 
       # 签名凭据（任务 9.3 配置 Secrets，9.4 和 9.5 接入）。
       # 没有配置的 Secret 在这里取到的是空字符串，而 Tauri CLI 把“已设置但为空”的环境变量当成有效值：
-      # 空的 APPLE_CERTIFICATE 会让构建在导入证书时失败。所以只导出非空的，没有配置时构建出未签名的安装包。
+      # 空的 APPLE_CERTIFICATE 会让构建在导入证书时失败。所以只导出非空的。
+      # 没有 macOS 证书时改用 ad-hoc 签名（APPLE_SIGNING_IDENTITY=-）：完全没签名的 .app 经浏览器下载后，
+      # 在 Apple Silicon 上常被提示“已损坏，无法打开”；ad-hoc 签名的只提示“无法验证开发者”，
+      # 测试者可以在“系统设置 → 隐私与安全性”里点“仍要打开”。正式发布仍要用 Developer ID 证书签名并公证。
       - name: 准备签名环境变量
         env:
           # macOS：Developer ID 证书（base64 的 .p12）、证书密码、签名身份
@@ -195,6 +200,10 @@ jobs:
           else
             echo "已配置的签名 Secret：${configured[*]}"
           fi
+          if [ "$RUNNER_OS" = macOS ] && [ -z "$APPLE_CERTIFICATE" ] && [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "::notice title=macOS 使用 ad-hoc 签名::没有配置 macOS 证书，安装包只做 ad-hoc 签名；测试者首次打开要在「隐私与安全性」里点「仍要打开」。"
+          fi
 
       # tauri-action 在构建完成后把安装包传到上面建好的草稿 Release。
       # 用 cargo tauri 而不是 npm 的 CLI，和本地开发一致；没有配置更新器，所以不生成 latest.json 和签名文件。
@@ -208,6 +217,21 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: false
+
+      # 对真正打进安装包的 sidecar 再跑一次 smoke。Windows 的 NSIS 安装包、Linux 的 deb 和 AppImage 直接从
+      # $SIDECAR_EXE 复制，构建之后这个文件没有再变过，测它就是测安装包里的那份；macOS 的 .app 里是签名之后的那份，
+      # 所以直接测 .app 里的，同时验证签名完好（ad-hoc 签名也要通过 --deep --strict）。
+      # 这一步在上传之后运行：失败时 checksums 任务不会运行，草稿 Release 不能当作可发布的版本。
+      - name: 检查安装包里的 sidecar
+        run: |
+          packaged="$SIDECAR_EXE"
+          if [ "$RUNNER_OS" = macOS ]; then
+            app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/EmailFileViewer.app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign -dv "$app" 2>&1 | grep -E '^(Signature|Authority|TeamIdentifier)' || true
+            packaged="$app/Contents/MacOS/efv-sidecar"
+          fi
+          "$packaged" --smoke samples
 
   # 所有平台都上传完之后，对草稿 Release 里的安装包算 SHA-256，生成 SHA256SUMS.txt 传回去
   checksums:

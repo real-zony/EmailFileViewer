@@ -4,11 +4,12 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Instant;
 
 use serde_json::{Value, json};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 
 use super::connection::{Connection, SidecarCommand};
 use super::documents::{DocEntry, Source};
@@ -16,6 +17,10 @@ use super::protocol::{
     DocHandle, OpenResult, OpenedDocument, PROTOCOL_VERSION, PathResult, PingResult, Result,
     SaveAllResult, SidecarError, Timeouts, code, kills_sidecar_on_timeout, method, parse_result,
 };
+use crate::quarantine;
+
+/// 关闭失败的文档最多再尝试清理几次（含第一次失败之后的重试）。
+const STALE_CLOSE_ATTEMPTS: u8 = 3;
 
 /// 怎样启动 sidecar，以及各类请求的超时。
 #[derive(Clone, Debug)]
@@ -38,6 +43,25 @@ impl SidecarConfig {
     }
 }
 
+/// 启动失败后的退避状态。
+#[derive(Default)]
+struct StartBackoff {
+    /// 连续启动失败的次数，启动成功后清零。
+    failures: u32,
+    /// 在这个时刻之前不再尝试启动。
+    retry_at: Option<Instant>,
+    /// 最近一次失败的原因，退避期间的请求用它说明情况。
+    last_error: String,
+}
+
+/// 关闭失败、还留在 sidecar 里的文档。
+struct StaleDocument {
+    /// 它所在的那一代 sidecar；进程换代之后文档随旧进程消失，不用再清理。
+    generation: u64,
+    doc_id: String,
+    attempts: u8,
+}
+
 struct Inner {
     config: SidecarConfig,
     /// 当前这一代 sidecar。加锁期间可能在启动进程并握手，所以并发的第一批请求会等同一次启动。
@@ -46,7 +70,10 @@ struct Inner {
     next_generation: AtomicU64,
     next_handle: AtomicU64,
     documents: StdMutex<HashMap<DocHandle, Arc<DocEntry>>>,
-    shutting_down: AtomicBool,
+    /// 退出信号。变为 true 之后不再启动 sidecar，正在进行的启动握手也会被打断。
+    shutdown: watch::Sender<bool>,
+    start_backoff: StdMutex<StartBackoff>,
+    stale_documents: StdMutex<Vec<StaleDocument>>,
 }
 
 /// sidecar 监管服务。可以随便 `clone`，所有副本共享同一个 sidecar 和同一张文档表。
@@ -67,7 +94,9 @@ impl SidecarService {
                 next_generation: AtomicU64::new(1),
                 next_handle: AtomicU64::new(1),
                 documents: StdMutex::new(HashMap::new()),
-                shutting_down: AtomicBool::new(false),
+                shutdown: watch::channel(false).0,
+                start_backoff: StdMutex::new(StartBackoff::default()),
+                stale_documents: StdMutex::new(Vec::new()),
             }),
         }
     }
@@ -184,7 +213,7 @@ impl SidecarService {
             })
     }
 
-    /// 把附件保存到用户在保存对话框里选的路径。
+    /// 把附件保存到用户在保存对话框里选的路径。保存好的文件会打上“来自网络”的标记（见 `quarantine`）。
     pub async fn save_attachment(
         &self,
         handle: DocHandle,
@@ -197,10 +226,12 @@ impl SidecarService {
                 json!({ "docId": doc_id, "attachmentId": attachment_id, "targetPath": target })
             })
             .await?;
-        Ok(parse_result::<PathResult>(method::ATTACHMENT_SAVE, value)?.path)
+        let path = parse_result::<PathResult>(method::ATTACHMENT_SAVE, value)?.path;
+        quarantine::mark_all(vec![path.clone()]).await;
+        Ok(path)
     }
 
-    /// 把全部附件保存到用户选的文件夹。单个附件失败不影响其他附件，见结果里的 `failed`。
+    /// 把全部附件保存到用户选的文件夹。单个附件失败不影响其他附件，见结果里的 `failed`；保存成功的文件都会打上“来自网络”的标记。
     pub async fn save_all_attachments(
         &self,
         handle: DocHandle,
@@ -214,11 +245,14 @@ impl SidecarService {
                 |doc_id| json!({ "docId": doc_id, "targetDir": target }),
             )
             .await?;
-        parse_result(method::ATTACHMENT_SAVE_ALL, value)
+        let result: SaveAllResult = parse_result(method::ATTACHMENT_SAVE_ALL, value)?;
+        quarantine::mark_all(result.saved.iter().map(|item| item.path.clone()).collect()).await;
+        Ok(result)
     }
 
     /// 把附件提取到本次会话的临时目录，返回文件路径，由调用方交给系统默认程序打开。
-    /// 可执行文件和脚本会被 sidecar 拒绝（`executable_refused`）。
+    /// 可执行文件和脚本会被 sidecar 拒绝（`executable_refused`）；返回之前文件已打上“来自网络”的标记，
+    /// 这样 Office 文档会用受保护视图打开，`.dmg` 之类的文件会经过 Gatekeeper。
     pub async fn extract_for_open(
         &self,
         handle: DocHandle,
@@ -231,13 +265,17 @@ impl SidecarService {
                 |doc_id| json!({ "docId": doc_id, "attachmentId": attachment_id }),
             )
             .await?;
-        Ok(parse_result::<PathResult>(method::ATTACHMENT_EXTRACT_FOR_OPEN, value)?.path)
+        let path = parse_result::<PathResult>(method::ATTACHMENT_EXTRACT_FOR_OPEN, value)?.path;
+        quarantine::mark_all(vec![path.clone()]).await;
+        Ok(path)
     }
 
     /// 应用退出时调用：关闭 sidecar 的 stdin，等它自己退出，超过 `Timeouts::shutdown_grace` 仍不退出就强制结束。
     /// 返回时进程已被回收。此后所有请求都返回 [`SidecarError::Unavailable`]。没有启动过 sidecar 时什么也不做。
+    ///
+    /// 总时长不超过宽限期加 1 秒：正在进行的启动握手会被立即打断（不然要等到握手超时），所以拿到锁不会久等。
     pub async fn shutdown(&self) {
-        self.inner.shutting_down.store(true, Ordering::SeqCst);
+        self.inner.shutdown.send_replace(true);
         let conn = self.inner.current.lock().await.take();
         if let Some(conn) = conn {
             conn.shutdown(self.inner.config.timeouts.shutdown_grace)
@@ -267,48 +305,143 @@ impl SidecarService {
             .ok_or(SidecarError::UnknownHandle)
     }
 
+    fn shutting_down(&self) -> bool {
+        *self.inner.shutdown.borrow()
+    }
+
     /// 当前这一代 sidecar；没有或已经退出就启动新的一代，并完成握手。
+    ///
+    /// 启动失败（进程起不来或握手没通过）之后有一段退避时间，期间的请求直接失败，不再反复启动：
+    /// 一次拖入很多文件而 sidecar 起不来时，不能让每个文件都等一遍握手超时。
     async fn connection(&self) -> Result<Arc<Connection>> {
         let mut current = self.inner.current.lock().await;
-        if self.inner.shutting_down.load(Ordering::SeqCst) {
+        if self.shutting_down() {
             return Err(SidecarError::Unavailable {
                 message: "the application is shutting down".into(),
             });
         }
         if let Some(conn) = current.as_ref().filter(|c| c.is_alive()) {
+            self.sweep_stale_documents(conn);
             return Ok(conn.clone());
         }
+        self.check_start_backoff()?;
 
         let generation = self.inner.next_generation.fetch_add(1, Ordering::SeqCst);
-        let conn = Connection::spawn(&self.inner.config.command, generation)?;
+        let conn = match Connection::spawn(&self.inner.config.command, generation) {
+            Ok(conn) => conn,
+            Err(error) => {
+                *current = None;
+                self.record_start_failure(&error);
+                return Err(error);
+            }
+        };
         match self.handshake(&conn).await {
             Ok(()) => {
+                *self.inner.start_backoff.lock().unwrap() = StartBackoff::default();
                 *current = Some(conn.clone());
+                self.sweep_stale_documents(&conn);
                 Ok(conn)
             }
             Err(error) => {
                 conn.kill().await;
                 *current = None;
+                // 因为应用正在退出而被打断的启动不算失败
+                if !self.shutting_down() {
+                    self.record_start_failure(&error);
+                }
                 Err(error)
             }
         }
     }
 
-    /// 就绪握手：`system.ping`，协议版本必须一致。
+    /// 还在退避期内就返回上一次失败的原因。
+    fn check_start_backoff(&self) -> Result<()> {
+        let backoff = self.inner.start_backoff.lock().unwrap();
+        match backoff.retry_at {
+            Some(at) if Instant::now() < at => Err(SidecarError::Unavailable {
+                message: format!(
+                    "the sidecar failed to start recently; not trying again for {:.1?} ({})",
+                    at.saturating_duration_since(Instant::now()),
+                    backoff.last_error
+                ),
+            }),
+            _ => Ok(()),
+        }
+    }
+
+    /// 记一次启动失败：连续失败越多，退避越久（翻倍，有上限）。
+    fn record_start_failure(&self, error: &SidecarError) {
+        let timeouts = &self.inner.config.timeouts;
+        let mut backoff = self.inner.start_backoff.lock().unwrap();
+        backoff.failures = backoff.failures.saturating_add(1);
+        backoff.last_error = error.message();
+        backoff.retry_at = if timeouts.start_backoff.is_zero() {
+            None
+        } else {
+            let doublings = (backoff.failures - 1).min(16);
+            let delay = timeouts
+                .start_backoff
+                .saturating_mul(1 << doublings)
+                .min(timeouts.start_backoff_max.max(timeouts.start_backoff));
+            Some(Instant::now() + delay)
+        };
+    }
+
+    /// 清理之前关闭失败、还留在当前这一代 sidecar 里的文档。在后台进行，不拖慢眼前的请求。
+    /// 每个文档最多再试 [`STALE_CLOSE_ATTEMPTS`] 次；旧一代里的随旧进程消失，直接丢弃。
+    fn sweep_stale_documents(&self, conn: &Arc<Connection>) {
+        let due: Vec<StaleDocument> = {
+            let mut stale = self.inner.stale_documents.lock().unwrap();
+            stale.retain(|item| item.generation >= conn.generation());
+            let (due, rest) = std::mem::take(&mut *stale)
+                .into_iter()
+                .partition(|item| item.generation == conn.generation());
+            *stale = rest;
+            due
+        };
+        if due.is_empty() {
+            return;
+        }
+        let (service, conn) = (self.clone(), conn.clone());
+        tokio::spawn(async move {
+            for mut item in due {
+                let params = json!({ "docId": item.doc_id });
+                match service.call(&conn, method::DOCUMENT_CLOSE, params).await {
+                    Ok(_) => {}
+                    Err(SidecarError::Remote { code, .. }) if code == code::DOCUMENT_NOT_FOUND => {}
+                    Err(error) => {
+                        log::debug!("closing a document left open failed again: {error}");
+                        item.attempts += 1;
+                        if item.attempts < STALE_CLOSE_ATTEMPTS && !error.is_crash() {
+                            service.inner.stale_documents.lock().unwrap().push(item);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /// 就绪握手：`system.ping`，协议版本必须一致。应用退出时立即放弃。
     async fn handshake(&self, conn: &Connection) -> Result<()> {
         let unavailable = |why: String| SidecarError::Unavailable {
             message: format!("sidecar handshake failed: {why}"),
         };
         let id = self.inner.next_request_id.fetch_add(1, Ordering::SeqCst);
-        let value = conn
-            .request(
+        let mut shutdown = self.inner.shutdown.subscribe();
+        let interrupted = async {
+            let _ = shutdown.wait_for(|down| *down).await;
+        };
+        let params = json!({});
+        let reply = tokio::select! {
+            reply = conn.request(
                 id,
                 method::PING,
-                &json!({}),
+                &params,
                 self.inner.config.timeouts.handshake,
-            )
-            .await
-            .map_err(|e| unavailable(e.to_string()))?;
+            ) => reply,
+            () = interrupted => return Err(unavailable("the application is shutting down".into())),
+        };
+        let value = reply.map_err(|e| unavailable(e.to_string()))?;
         let ping: PingResult =
             parse_result(method::PING, value).map_err(|e| unavailable(e.to_string()))?;
         if ping.protocol_version != PROTOCOL_VERSION {
@@ -454,7 +587,22 @@ impl SidecarService {
             Ok(_) => Ok(()),
             // 文档已经不在了就是想要的结果
             Err(SidecarError::Remote { code, .. }) if code == code::DOCUMENT_NOT_FOUND => Ok(()),
-            Err(error) => Err(error),
+            Err(error) => {
+                // 进程崩溃时文档随进程消失；其他失败（超时、sidecar 报错）说明文档还留在里面，
+                // 句柄已经没了，没人会再来关它：记下来，下次用到同一代 sidecar 时在后台再试
+                if !error.is_crash() {
+                    self.inner
+                        .stale_documents
+                        .lock()
+                        .unwrap()
+                        .push(StaleDocument {
+                            generation: conn.generation(),
+                            doc_id,
+                            attempts: 1,
+                        });
+                }
+                Err(error)
+            }
         }
     }
 }
@@ -492,6 +640,16 @@ impl SidecarService {
 
     pub(crate) fn requests_sent(&self) -> u64 {
         self.inner.next_request_id.load(Ordering::SeqCst) - 1
+    }
+
+    /// 已经尝试启动过多少次 sidecar 进程（退避期内被拒绝的请求不算）。
+    pub(crate) fn start_attempts(&self) -> u64 {
+        self.inner.next_generation.load(Ordering::SeqCst) - 1
+    }
+
+    /// 还有多少个关闭失败、等待清理的文档。
+    pub(crate) fn stale_documents(&self) -> usize {
+        self.inner.stale_documents.lock().unwrap().len()
     }
 
     /// 绕过句柄，直接对当前 sidecar 发原始请求（会按需启动）。

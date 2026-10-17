@@ -1,19 +1,36 @@
 //! 从启动参数、系统的“打开文件”事件和拖放事件里取出要打开的文件路径。
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use tauri::{DragDropEvent, WindowEvent};
 use url::Url;
 
-/// 解析命令行参数（第一个是程序自己）。跳过 `-` 开头的参数（例如 macOS 的 `-psn_…`）和不存在的路径；
-/// 相对路径按 `cwd` 补全——单实例转发来的参数是第二个实例的参数，要用它的工作目录；也接受 `file://` URL。
-pub fn paths_from_args(args: &[String], cwd: &Path) -> Vec<PathBuf> {
+/// 参数是不是 `file://` 开头的 URL（scheme 不区分大小写）。
+fn is_file_url(arg: &OsStr) -> bool {
+    let bytes = arg.as_encoded_bytes();
+    bytes.len() >= 7 && bytes[..7].eq_ignore_ascii_case(b"file://")
+}
+
+/// 解析命令行参数（第一个是程序自己）。参数用 `OsStr`，路径里有不合法的 UTF-8 也不会出问题。
+///
+/// 跳过空参数、`-` 开头的参数（例如 macOS 的 `-psn_…`）和目录；相对路径按 `cwd` 补全——
+/// 单实例转发来的参数是第二个实例的参数，要用它的工作目录；也接受 `file://` URL（`FILE://` 也行）。
+/// **不存在的路径照样保留**：交给打开批次，由它得到“无法读取”的失败事件，用户才知道出了什么事，而不是什么也没发生。
+pub fn paths_from_args<S: AsRef<OsStr>>(args: &[S], cwd: &Path) -> Vec<PathBuf> {
     args.iter()
         .skip(1)
-        .filter(|arg| !arg.is_empty() && !arg.starts_with('-'))
-        .filter_map(|arg| match arg.strip_prefix("file://") {
-            Some(_) => Url::parse(arg).ok().and_then(|url| url.to_file_path().ok()),
-            None => Some(PathBuf::from(arg)),
+        .map(AsRef::as_ref)
+        .filter(|arg| !arg.is_empty() && !arg.as_encoded_bytes().starts_with(b"-"))
+        .filter_map(|arg| {
+            if is_file_url(arg) {
+                // 地址必须是合法的 UTF-8（百分号编码之后），解析不出路径的忽略
+                arg.to_str()
+                    .and_then(|text| Url::parse(text).ok())
+                    .and_then(|url| url.to_file_path().ok())
+            } else {
+                Some(PathBuf::from(arg))
+            }
         })
         .map(|path| {
             if path.is_relative() {
@@ -22,17 +39,17 @@ pub fn paths_from_args(args: &[String], cwd: &Path) -> Vec<PathBuf> {
                 path
             }
         })
-        .filter(|path| path.is_file())
+        .filter(|path| !path.is_dir())
         .collect()
 }
 
-/// macOS 的 `RunEvent::Opened`：只认 `file://`，其他 scheme 忽略。
+/// macOS 的 `RunEvent::Opened`：只认 `file://`，其他 scheme 忽略。和命令行参数一样，目录忽略，不存在的文件保留。
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn paths_from_urls(urls: &[Url]) -> Vec<PathBuf> {
     urls.iter()
         .filter(|url| url.scheme() == "file")
         .filter_map(|url| url.to_file_path().ok())
-        .filter(|path| path.is_file())
+        .filter(|path| !path.is_dir())
         .collect()
 }
 
@@ -85,6 +102,10 @@ mod tests {
         items.iter().map(|s| (*s).to_owned()).collect()
     }
 
+    fn file_name(path: &Path) -> &str {
+        path.file_name().unwrap().to_str().unwrap()
+    }
+
     #[test]
     fn existing_files_are_kept_in_order_and_the_program_name_is_skipped() {
         let dir = TempDir::new("order");
@@ -98,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn options_and_missing_paths_and_directories_are_skipped() {
+    fn options_empty_arguments_and_directories_are_skipped() {
         let dir = TempDir::new("skip");
         let a = dir.file("a.eml");
         let given = args(&[
@@ -106,13 +127,71 @@ mod tests {
             "-psn_0_12345",
             "--flag",
             "",
-            dir.0.join("missing.eml").to_str().unwrap(),
             dir.0.to_str().unwrap(),
             a.to_str().unwrap(),
         ]);
         assert_eq!(paths_from_args(&given, Path::new("/")), [a]);
         assert!(paths_from_args(&args(&["app"]), Path::new("/")).is_empty());
-        assert!(paths_from_args(&[], Path::new("/")).is_empty());
+        assert!(paths_from_args::<String>(&[], Path::new("/")).is_empty());
+    }
+
+    #[test]
+    fn a_path_that_does_not_exist_is_kept_so_the_user_is_told_it_cannot_be_read() {
+        let dir = TempDir::new("missing");
+        let (a, missing) = (dir.file("a.eml"), dir.0.join("missing.eml"));
+        let given = args(&["app", missing.to_str().unwrap(), a.to_str().unwrap()]);
+        assert_eq!(
+            paths_from_args(&given, Path::new("/")),
+            [missing.clone(), a]
+        );
+        // 相对路径也一样，补全之后交给打开批次
+        assert_eq!(
+            paths_from_args(&args(&["app", "gone.msg"]), &dir.0),
+            [dir.0.join("gone.msg")]
+        );
+        // file:// 形式的也是
+        let url = Url::from_file_path(&missing).unwrap();
+        assert_eq!(
+            paths_from_args(&args(&["app", url.as_str()]), Path::new("/")),
+            [missing]
+        );
+    }
+
+    #[test]
+    fn the_file_scheme_is_matched_without_regard_to_case() {
+        let dir = TempDir::new("scheme-case");
+        let a = dir.file("a b.eml");
+        let url = Url::from_file_path(&a).unwrap();
+        for scheme in ["file://", "FILE://", "File://", "fIlE://"] {
+            let text = url.as_str().replacen("file://", scheme, 1);
+            assert_eq!(
+                paths_from_args(&args(&["app", &text]), Path::new("/")),
+                std::slice::from_ref(&a),
+                "{text}"
+            );
+        }
+        // 解析不出路径的 file URL（例如带主机名）忽略；它不会被当作相对路径
+        assert!(paths_from_args(&args(&["app", "FILE://example.com/x.eml"]), &dir.0).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn arguments_that_are_not_valid_utf8_are_kept_without_panicking() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        // 文件名不是合法的 UTF-8（Latin-1 写法的 é）。macOS 的文件系统建不出这样的文件，
+        // 但解析参数不需要文件存在：不存在的路径同样保留
+        let path = PathBuf::from(OsString::from_vec(b"/mail/caf\xe9.eml".to_vec()));
+        let given = vec![
+            OsString::from("app"),
+            path.clone().into_os_string(),
+            // 不合法的 UTF-8 开头的 file URL 不是路径，直接忽略
+            OsString::from_vec(b"file:///tmp/\xff.eml".to_vec()),
+            // 以 - 开头的仍然当作选项
+            OsString::from_vec(b"-\xff".to_vec()),
+        ];
+        assert_eq!(paths_from_args(&given, Path::new("/")), [path]);
     }
 
     #[test]
@@ -121,9 +200,10 @@ mod tests {
         let a = dir.file("a.eml");
         // 第二个实例在 dir 里执行 `app a.eml`，已运行的实例的工作目录不同
         assert_eq!(paths_from_args(&args(&["app", "a.eml"]), &dir.0), [a]);
-        assert!(
-            paths_from_args(&args(&["app", "a.eml"]), Path::new("/definitely/elsewhere"))
-                .is_empty()
+        // 工作目录不对时补出的是另一个路径（不存在，由打开批次报告）
+        assert_eq!(
+            paths_from_args(&args(&["app", "a.eml"]), Path::new("/definitely/elsewhere")),
+            [PathBuf::from("/definitely/elsewhere/a.eml")]
         );
     }
 
@@ -147,9 +227,15 @@ mod tests {
     }
 
     #[test]
-    fn opened_urls_that_do_not_exist_are_dropped() {
-        let url = Url::from_file_path("/definitely/not/here.eml").unwrap();
-        assert!(paths_from_urls(&[url]).is_empty());
+    fn opened_urls_that_do_not_exist_are_kept_and_directories_are_dropped() {
+        let dir = TempDir::new("opened");
+        let missing = Url::from_file_path("/definitely/not/here.eml").unwrap();
+        assert_eq!(
+            paths_from_urls(&[missing]),
+            [PathBuf::from("/definitely/not/here.eml")]
+        );
+        assert!(paths_from_urls(&[Url::from_directory_path(&dir.0).unwrap()]).is_empty());
+        assert_eq!(file_name(&dir.file("x.eml")), "x.eml");
     }
 
     #[test]

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use tokio::time::sleep;
 
-use super::testing::{service, service_with, timeouts};
+use super::testing::{fake_command, service, service_with, timeouts};
 use super::*;
 
 // ---------------------------------------------------------------- 辅助
@@ -1099,4 +1099,405 @@ async fn real_sidecar_speaks_the_protocol() {
     println!("shutdown took {:?}", started.elapsed());
     assert!(!process_exists(new_pid.unwrap()));
     let _ = std::fs::remove_dir_all(&out);
+}
+
+// ---------------------------------------------------------------- 超时之后的下一个请求
+
+/// 回归：解析超时会结束 sidecar；紧接着的下一个请求不能被误报成崩溃，而要重启 sidecar 后正常完成。
+/// （原来 `abort` 只拿走了写端，`alive` 要等进程被回收才变成 false，期间的请求拿到的是已死的连接。）
+#[tokio::test]
+async fn a_request_right_after_a_parse_timeout_restarts_the_sidecar_instead_of_reporting_a_crash() {
+    let service = service_with(
+        &[],
+        Timeouts {
+            open: Duration::from_millis(300),
+            ..timeouts()
+        },
+    );
+    service.open_file(&mail("a.eml")).await.unwrap();
+    let error = service.open_file(&mail("hang.eml")).await.unwrap_err();
+    assert_eq!(error.code(), "timeout");
+
+    let next = service.open_file(&mail("b.eml")).await;
+    assert!(next.is_ok(), "the next open failed: {:?}", next.err());
+    assert_eq!(service.current_process().await.unwrap().0, 2);
+}
+
+/// 同上，换成多线程运行时：进程的回收可以和下一个请求真正并行。
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_request_right_after_a_parse_timeout_is_fine_on_a_multi_threaded_runtime() {
+    let service = service_with(
+        &[],
+        Timeouts {
+            open: Duration::from_millis(300),
+            ..timeouts()
+        },
+    );
+    service.open_file(&mail("a.eml")).await.unwrap();
+    let error = service.open_file(&mail("hang.eml")).await.unwrap_err();
+    assert_eq!(error.code(), "timeout");
+
+    let next = service.open_file(&mail("b.eml")).await;
+    assert!(next.is_ok(), "the next open failed: {:?}", next.err());
+}
+
+/// 回归：一次拖入的三个文件里，第二个超时，第三个不能收到 `sidecar_crashed`。
+#[tokio::test]
+async fn in_a_batch_the_file_after_a_timed_out_one_still_opens() {
+    let service = service_with(
+        &[],
+        Timeouts {
+            open: Duration::from_millis(300),
+            ..timeouts()
+        },
+    );
+    let mut codes = Vec::new();
+    for name in ["one.eml", "hang.eml", "three.eml"] {
+        codes.push(match service.open_file(&mail(name)).await {
+            Ok(_) => "ok".to_owned(),
+            Err(error) => error.code().to_owned(),
+        });
+    }
+    assert_eq!(codes, ["ok", "timeout", "ok"]);
+}
+
+// ---------------------------------------------------------------- “来自网络”的标记
+
+/// 测试用的临时目录，离开作用域时删除。
+struct Scratch(PathBuf);
+impl Scratch {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("efv-svc-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+    fn text(&self) -> &str {
+        self.0.to_str().unwrap()
+    }
+}
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// 文件上有平台的“来自网络”标记（Windows 的 Zone.Identifier、macOS 的 com.apple.quarantine）；
+/// 没有这种机制的平台上不应该有。
+fn assert_marked(path: &Path) {
+    assert!(path.is_file(), "{} was not written", path.display());
+    assert_eq!(
+        crate::quarantine::read_mark(path).is_some(),
+        crate::quarantine::SUPPORTED,
+        "{}",
+        path.display()
+    );
+}
+
+#[tokio::test]
+async fn an_extracted_attachment_is_marked_before_it_is_handed_out() {
+    let dir = Scratch::new("extract");
+    let service = service_with(&[("FAKE_WRITE_DIR", dir.text())], timeouts());
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+    let path = service.extract_for_open(a, "report.pdf").await.unwrap();
+    assert_eq!(path, dir.0.join("report.pdf"));
+    assert_marked(&path);
+}
+
+#[tokio::test]
+async fn a_saved_attachment_is_marked() {
+    let dir = Scratch::new("save");
+    let service = service_with(&[("FAKE_WRITE_DIR", dir.text())], timeouts());
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+    let target = dir.0.join("chosen.docx");
+    let saved = service.save_attachment(a, "x", &target).await.unwrap();
+    assert_eq!(saved, target);
+    assert_marked(&saved);
+}
+
+#[tokio::test]
+async fn every_file_saved_by_save_all_is_marked() {
+    let dir = Scratch::new("save-all");
+    let service = service_with(&[("FAKE_WRITE_DIR", dir.text())], timeouts());
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+    let result = service.save_all_attachments(a, &dir.0).await.unwrap();
+    assert_eq!(result.saved.len(), 1);
+    assert_eq!(result.failed.len(), 1);
+    for saved in &result.saved {
+        assert_marked(&saved.path);
+    }
+}
+
+#[tokio::test]
+async fn a_path_that_cannot_be_marked_does_not_fail_the_request() {
+    // 默认的假 sidecar 返回的路径在磁盘上并不存在：标记失败只记警告
+    let service = service();
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+    assert!(service.extract_for_open(a, "report.pdf").await.is_ok());
+    assert!(
+        service
+            .save_attachment(a, "x", Path::new("/nowhere/x.pdf"))
+            .await
+            .is_ok()
+    );
+    assert!(
+        service
+            .save_all_attachments(a, Path::new("/nowhere"))
+            .await
+            .is_ok()
+    );
+}
+
+// ---------------------------------------------------------------- stdout 单行长度上限、stderr
+
+#[tokio::test]
+async fn a_stdout_line_over_the_limit_is_a_protocol_error_and_the_sidecar_is_stopped() {
+    let mut command = fake_command(&[]);
+    command.max_line_bytes = 64 * 1024;
+    let service = SidecarService::new(SidecarConfig {
+        command,
+        timeouts: timeouts(),
+    });
+    service.open_file(&mail("a.eml")).await.unwrap();
+    let (_, pid) = service.current_process().await.unwrap();
+
+    let error = service
+        .open_file(&mail("overflow-line.eml"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), "protocol_error", "{error}");
+    assert_eq!(error.wire_code(), "internal_error");
+    assert!(error.message().contains("longer than 65536"), "{error}");
+
+    // 进程被立即结束并回收（不是等它自己退出）
+    #[cfg(unix)]
+    {
+        let pid = pid.unwrap();
+        let mut gone = false;
+        for _ in 0..50 {
+            if !process_exists(pid) {
+                gone = true;
+                break;
+            }
+            sleep(Duration::from_millis(40)).await;
+        }
+        assert!(
+            gone,
+            "the sidecar that wrote the huge line is still running"
+        );
+    }
+    let _ = pid;
+
+    // 下次请求重启 sidecar，一切照常
+    service.open_file(&mail("b.eml")).await.unwrap();
+    assert_eq!(service.current_process().await.unwrap().0, 2);
+}
+
+#[tokio::test]
+async fn a_stdout_line_under_the_limit_is_still_fine() {
+    let mut command = fake_command(&[]);
+    // 1 MiB 的垃圾行不是合法的 JSON，但没超过上限：按“非 JSON 行”忽略，请求照常完成
+    command.max_line_bytes = 2 * 1024 * 1024;
+    let service = SidecarService::new(SidecarConfig {
+        command,
+        timeouts: timeouts(),
+    });
+    service.open_file(&mail("overflow-line.eml")).await.unwrap();
+    assert_eq!(service.current_process().await.unwrap().0, 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn stderr_with_invalid_utf8_does_not_stop_the_log_forwarding() {
+    capture_logs();
+    let service = service();
+    service.open_file(&mail("bad-stderr.eml")).await.unwrap();
+    let pid = service.current_process().await.unwrap().1.unwrap();
+    assert!(wait_for_log("fake-sidecar: broken \u{fffd}\u{fffd} utf-8").await);
+    // 不合法的那一行之后的输出（退出时的 “stdin closed”）仍被转发
+    service.shutdown().await;
+    assert!(wait_for_log(&format!("(pid Some({pid})): fake-sidecar: stdin closed")).await);
+}
+
+// ---------------------------------------------------------------- 启动退避
+
+#[tokio::test]
+async fn a_sidecar_that_cannot_start_is_not_launched_again_for_every_request() {
+    let service = service_with(
+        &[("FAKE_CRASH_ON_START", "1")],
+        Timeouts {
+            start_backoff: Duration::from_millis(400),
+            start_backoff_max: Duration::from_secs(5),
+            ..timeouts()
+        },
+    );
+    let first = service.open_file(&mail("a.eml")).await.unwrap_err();
+    assert_eq!(first.code(), "sidecar_unavailable");
+    assert_eq!(service.start_attempts(), 1);
+
+    // 退避期内：直接失败，不再启动进程，原因里带着上一次失败的说明
+    for name in ["b.eml", "c.eml", "d.eml"] {
+        let error = service.open_file(&mail(name)).await.unwrap_err();
+        assert_eq!(error.code(), "sidecar_unavailable");
+        assert!(error.message().contains("not trying again"), "{error}");
+        assert!(error.message().contains("handshake failed"), "{error}");
+    }
+    assert_eq!(service.start_attempts(), 1);
+
+    // 退避结束：再试一次，仍然失败，退避时间翻倍（800 毫秒）
+    sleep(Duration::from_millis(450)).await;
+    assert!(service.open_file(&mail("e.eml")).await.is_err());
+    assert_eq!(service.start_attempts(), 2);
+    sleep(Duration::from_millis(450)).await;
+    let error = service.open_file(&mail("f.eml")).await.unwrap_err();
+    assert!(error.message().contains("not trying again"), "{error}");
+    assert_eq!(service.start_attempts(), 2);
+    sleep(Duration::from_millis(450)).await;
+    assert!(service.open_file(&mail("g.eml")).await.is_err());
+    assert_eq!(service.start_attempts(), 3);
+}
+
+#[tokio::test]
+async fn a_successful_start_clears_the_backoff_and_ordinary_crashes_never_cause_one() {
+    let dir = Scratch::new("backoff");
+    let flag = dir.0.join("cannot-start");
+    std::fs::write(&flag, "").unwrap();
+    let service = service_with(
+        &[("FAKE_CRASH_ON_START_FILE", flag.to_str().unwrap())],
+        Timeouts {
+            start_backoff: Duration::from_millis(300),
+            start_backoff_max: Duration::from_secs(5),
+            ..timeouts()
+        },
+    );
+    assert!(service.open_file(&mail("a.eml")).await.is_err());
+    assert!(service.open_file(&mail("a.eml")).await.is_err());
+    assert_eq!(service.start_attempts(), 1);
+
+    // 问题解决了：退避一过就能启动
+    std::fs::remove_file(&flag).unwrap();
+    sleep(Duration::from_millis(350)).await;
+    service.open_file(&mail("a.eml")).await.unwrap();
+    assert_eq!(service.start_attempts(), 2);
+
+    // 正常运行之后的崩溃不是“启动失败”：下一个请求立即重启
+    crash(&service).await;
+    service.open_file(&mail("b.eml")).await.unwrap();
+    assert_eq!(service.start_attempts(), 3);
+}
+
+#[tokio::test]
+async fn a_failed_handshake_also_backs_off() {
+    let service = service_with(
+        &[("FAKE_NO_PING", "1")],
+        Timeouts {
+            handshake: Duration::from_millis(200),
+            start_backoff: Duration::from_secs(5),
+            start_backoff_max: Duration::from_secs(5),
+            ..timeouts()
+        },
+    );
+    assert!(service.open_file(&mail("a.eml")).await.is_err());
+    let started = Instant::now();
+    // 一批文件：除了第一个，都不必再等握手超时
+    for name in ["b.eml", "c.eml", "d.eml"] {
+        assert!(service.open_file(&mail(name)).await.is_err());
+    }
+    assert!(started.elapsed() < Duration::from_millis(150));
+    assert_eq!(service.start_attempts(), 1);
+}
+
+// ---------------------------------------------------------------- 关闭失败的文档
+
+#[tokio::test]
+async fn a_document_whose_close_failed_is_closed_in_the_background_when_the_sidecar_is_used_again()
+{
+    let service = service_with(&[("FAKE_CLOSE_FAILS", "1")], timeouts());
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+
+    let error = service.close_document(a).await.unwrap_err();
+    assert_eq!(error.wire_code(), "internal_error");
+    // 句柄已经没了，但文档还留在 sidecar 里，记了下来
+    assert_eq!(service.open_handles(), 0);
+    assert_eq!(service.stale_documents(), 1);
+
+    // 下一次用到 sidecar 时在后台再关一次（第二次 document.close 成功）
+    service.raw("system.ping", json!({})).await.unwrap();
+    let mut remaining = usize::MAX;
+    for _ in 0..50 {
+        remaining = fake_docs(&service).await.len();
+        if remaining == 0 {
+            break;
+        }
+        sleep(Duration::from_millis(40)).await;
+    }
+    assert_eq!(remaining, 0, "the document is still open in the sidecar");
+    assert_eq!(service.stale_documents(), 0);
+}
+
+#[tokio::test]
+async fn stale_documents_of_a_dead_sidecar_are_forgotten() {
+    let service = service_with(&[("FAKE_CLOSE_FAILS", "1")], timeouts());
+    let a = service.open_file(&mail("a.eml")).await.unwrap().handle;
+    assert!(service.close_document(a).await.is_err());
+    assert_eq!(service.stale_documents(), 1);
+
+    // sidecar 崩溃重启：旧进程里的文档已经不存在，不必也不能再清理
+    crash(&service).await;
+    service.open_file(&mail("b.eml")).await.unwrap();
+    assert_eq!(service.current_process().await.unwrap().0, 2);
+    assert_eq!(service.stale_documents(), 0);
+}
+
+// ---------------------------------------------------------------- 退出的时长
+
+#[tokio::test]
+async fn shutdown_interrupts_a_start_that_is_still_waiting_for_the_ping() {
+    let service = service_with(
+        &[("FAKE_NO_PING", "1")],
+        Timeouts {
+            handshake: Duration::from_secs(30),
+            ..timeouts()
+        },
+    );
+    let opening = tokio::spawn({
+        let service = service.clone();
+        async move { service.open_file(&mail("a.eml")).await }
+    });
+    sleep(Duration::from_millis(300)).await;
+    assert_eq!(service.start_attempts(), 1, "the start is under way");
+
+    let started = Instant::now();
+    service.shutdown().await;
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "shutdown waited for the handshake: {:?}",
+        started.elapsed()
+    );
+    let error = opening.await.unwrap().unwrap_err();
+    assert_eq!(error.code(), "sidecar_unavailable");
+    assert!(error.message().contains("shutting down"), "{error}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shutdown_with_the_default_grace_period_takes_under_five_seconds() {
+    // 最坏的情况：sidecar 读到 EOF 也不退出，只能等宽限期结束后强制结束
+    let service = service_with(
+        &[("FAKE_IGNORE_EOF", "1")],
+        Timeouts {
+            shutdown_grace: Timeouts::default().shutdown_grace,
+            ..timeouts()
+        },
+    );
+    service.open_file(&mail("a.eml")).await.unwrap();
+    let pid = service.current_process().await.unwrap().1.unwrap();
+    let started = Instant::now();
+    service.shutdown().await;
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+    assert!(!process_exists(pid));
 }

@@ -7,8 +7,13 @@
 //! - `garbage`：回复之前先输出几行不是合法响应的内容
 //! - `exit-after`：回复之后立刻退出
 //! - `missing`：返回 `unreadable`；`corrupt`：返回 `corrupted`
+//! - `overflow-line`：回复之前先在 stdout 上写一行 1 MiB 的内容（用来测单行长度上限）
+//! - `bad-stderr`：先往 stderr 写一行不合法的 UTF-8
 //!
 //! 环境变量控制整个进程：`FAKE_CRASH_ON_START`、`FAKE_NO_PING`、`FAKE_PROTOCOL_VERSION`、`FAKE_IGNORE_EOF`。
+//! `FAKE_CRASH_ON_START_FILE` 指向一个文件：它存在时进程启动就退出（可以在测试中途删掉，模拟“起不来，后来好了”）。
+//! `FAKE_CLOSE_FAILS` 设置后，第一次 `document.close` 返回 `internal_error`，文档保留。
+//! `FAKE_WRITE_DIR` 指向一个目录：保存和提取会真的写出文件（保存写到目标路径，提取写到这个目录里），返回真实路径。
 //! `FAKE_POISON_FILE` 指向一个文本文件：打开路径中包含该文件里某一行的邮件时，进程崩溃。
 //! 文件可以在 sidecar 运行期间创建，用来模拟“文件第一次能打开，重新打开时让 sidecar 崩溃”。
 //! 每个请求在自己的线程里处理，所以响应顺序和请求顺序可以不同。
@@ -29,6 +34,8 @@ struct State {
     /// docId -> 来源描述（顶层是文件路径，嵌套是 “父来源>附件Id”）
     docs: Mutex<HashMap<String, String>>,
     out: Mutex<std::io::Stdout>,
+    /// `document.close` 已经被调用过多少次（`FAKE_CLOSE_FAILS` 用）
+    closes: AtomicU64,
 }
 
 impl State {
@@ -83,6 +90,20 @@ fn is_poisoned(path: &str) -> bool {
     })
 }
 
+/// `FAKE_WRITE_DIR`：设置后，保存和提取会真的写出文件。
+fn write_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("FAKE_WRITE_DIR").map(std::path::PathBuf::from)
+}
+
+fn write_file(path: &std::path::Path) -> Result<(), (&'static str, String)> {
+    std::fs::write(path, b"fake attachment").map_err(|e| {
+        (
+            "write_failed",
+            format!("cannot write {}: {e}", path.display()),
+        )
+    })
+}
+
 fn strings(params: &Value, out: &mut Vec<String>) {
     match params {
         Value::String(s) => out.push(s.clone()),
@@ -127,6 +148,12 @@ fn handle(state: &State, request: Value) {
     if delay > 0 {
         thread::sleep(Duration::from_millis(delay));
     }
+    if all.contains("bad-stderr") {
+        let _ = std::io::stderr().write_all(b"fake-sidecar: broken \xff\xfe utf-8\n");
+    }
+    if all.contains("overflow-line") {
+        state.write_line(&"x".repeat(1024 * 1024));
+    }
     if all.contains("garbage") {
         state.write_line("this line is not JSON");
         state.write_line("[1, 2, 3]");
@@ -165,26 +192,47 @@ fn handle(state: &State, request: Value) {
         }),
         "document.close" => {
             let doc_id = params["docId"].as_str().unwrap_or_default();
-            match state.docs.lock().unwrap().remove(doc_id) {
-                Some(_) => Ok(json!({})),
-                None => Err(("document_not_found", format!("no document {doc_id}"))),
+            let nth = state.closes.fetch_add(1, Ordering::SeqCst);
+            if nth == 0 && env_flag("FAKE_CLOSE_FAILS") {
+                Err(("internal_error", "pretend the close failed".to_owned()))
+            } else {
+                match state.docs.lock().unwrap().remove(doc_id) {
+                    Some(_) => Ok(json!({})),
+                    None => Err(("document_not_found", format!("no document {doc_id}"))),
+                }
             }
         }
-        "attachment.save" => state.source_of(&params).map(|source| {
+        "attachment.save" => state.source_of(&params).and_then(|source| {
             let target = params["targetPath"].as_str().unwrap_or_default();
-            json!({ "path": format!("{target}|{source}|pid{}", state.pid) })
+            if write_dir().is_some() {
+                // 真的写出文件，返回目标路径本身
+                write_file(std::path::Path::new(target))?;
+                return Ok(json!({ "path": target }));
+            }
+            Ok(json!({ "path": format!("{target}|{source}|pid{}", state.pid) }))
         }),
-        "attachment.saveAll" => state.source_of(&params).map(|source| {
+        "attachment.saveAll" => state.source_of(&params).and_then(|source| {
             let dir = params["targetDir"].as_str().unwrap_or_default();
-            json!({
-                "saved": [{ "attachmentId": "a1", "path": format!("{dir}/{source}") }],
+            let path = if write_dir().is_some() {
+                let path = std::path::Path::new(dir).join("saved-a1.bin");
+                write_file(&path)?;
+                path.to_string_lossy().into_owned()
+            } else {
+                format!("{dir}/{source}")
+            };
+            Ok(json!({
+                "saved": [{ "attachmentId": "a1", "path": path }],
                 "failed": [{ "attachmentId": "a2", "code": "write_failed", "message": "disk full" }],
-            })
+            }))
         }),
         "attachment.extractForOpen" => state.source_of(&params).and_then(|source| {
             let attachment = params["attachmentId"].as_str().unwrap_or_default();
             if attachment.ends_with(".exe") {
                 Err(("executable_refused", format!("{attachment} can only be saved")))
+            } else if let Some(dir) = write_dir() {
+                let path = dir.join(attachment);
+                write_file(&path)?;
+                Ok(json!({ "path": path }))
             } else {
                 Ok(json!({ "path": format!("/tmp/fake/{}/{source}/{attachment}", state.pid) }))
             }
@@ -203,7 +251,10 @@ fn handle(state: &State, request: Value) {
 fn main() {
     let pid = std::process::id();
     eprintln!("fake-sidecar: started (pid {pid})");
-    if env_flag("FAKE_CRASH_ON_START") {
+    if env_flag("FAKE_CRASH_ON_START")
+        || std::env::var_os("FAKE_CRASH_ON_START_FILE")
+            .is_some_and(|file| std::path::Path::new(&file).exists())
+    {
         exit(3);
     }
 
@@ -212,6 +263,7 @@ fn main() {
         counter: AtomicU64::new(0),
         docs: Mutex::new(HashMap::new()),
         out: Mutex::new(std::io::stdout()),
+        closes: AtomicU64::new(0),
     });
     let mut workers = Vec::new();
     for line in std::io::stdin().lock().lines() {

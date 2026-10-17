@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdin, ChildStdout, Command};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
@@ -22,8 +22,13 @@ use super::protocol::{Result, SidecarError, code};
 
 /// 日志里一行最多保留多少字符，避免异常输出刷屏。
 const LOG_LINE_LIMIT: usize = 300;
+/// stdout 单行（一条协议消息）的长度上限，字节数。sidecar 的正文和内联图片本身有上限，远小于它；
+/// 超过就说明协议已经不可信（或者 sidecar 失控了），不能让 Rust 端的内存跟着涨。
+pub(crate) const MAX_LINE_BYTES: usize = 256 * 1024 * 1024;
+/// stderr 一行日志最多读取的字节数，超出的部分丢弃。
+const STDERR_LINE_BYTES: usize = 64 * 1024;
 /// 进程退出后，等待 stdout 读完最后几行的时间。
-const STDOUT_DRAIN: Duration = Duration::from_secs(1);
+pub(crate) const STDOUT_DRAIN: Duration = Duration::from_secs(1);
 /// stdout 先关闭、进程却还没退出时，等待进程退出的时间，超时则强制结束。
 const STDOUT_CLOSED_GRACE: Duration = Duration::from_secs(2);
 
@@ -33,6 +38,8 @@ pub struct SidecarCommand {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub envs: Vec<(OsString, OsString)>,
+    /// stdout 单行的长度上限（字节）。超过就当作协议错误并结束进程。
+    pub max_line_bytes: usize,
 }
 
 impl SidecarCommand {
@@ -42,6 +49,7 @@ impl SidecarCommand {
             program: program.into(),
             args: vec!["--stdio".into()],
             envs: Vec::new(),
+            max_line_bytes: MAX_LINE_BYTES,
         }
     }
 
@@ -172,7 +180,7 @@ impl Connection {
 
         tokio::spawn(write_stdin(stdin, line_rx, shared.clone()));
         tokio::spawn(forward_stderr(stderr, generation, pid));
-        let reader = tokio::spawn(read_stdout(stdout, shared.clone()));
+        let reader = tokio::spawn(read_stdout(stdout, shared.clone(), command.max_line_bytes));
         tokio::spawn(supervise(child, reader, stop_rx, shared.clone(), exited_tx));
         log::debug!("sidecar #{generation} started (pid {pid:?})");
 
@@ -258,6 +266,9 @@ impl Connection {
     }
 
     fn stop_with(&self, grace: Duration, reason: &str) {
+        // 立刻标记为不可用，不等进程被回收：这之后的请求要启动新的一代，而不是拿到这个正在退出、
+        // 已经不收请求的连接（否则紧接着超时的那个请求会被误报成崩溃）
+        self.shared.alive.store(false, Ordering::SeqCst);
         self.writer.lock().unwrap().take();
         if let Some(stop) = self.stop.lock().unwrap().take() {
             let _ = stop.send(Stop {
@@ -302,28 +313,120 @@ async fn write_stdin(
     // 离开作用域时 stdin 被关闭，sidecar 读到 EOF
 }
 
-async fn forward_stderr(stderr: ChildStderr, generation: u64, pid: Option<u32>) {
-    let mut lines = BufReader::new(stderr).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        log::debug!(target: "efv::sidecar", "#{generation} (pid {pid:?}): {}", truncate(&line));
+/// 读到的一行的情况。
+#[derive(Debug, PartialEq, Eq)]
+enum LineRead {
+    /// 流已经结束，没有更多内容。
+    Eof,
+    /// 读到完整的一行（含换行；流结束前最后一行可以没有换行）。
+    Complete,
+    /// 这一行超过上限，只读了开头 `limit + 1` 字节，这一行的其余部分还在流里。
+    TooLong,
+}
+
+/// 读一行到 `buf`（先清空），内容不超过 `limit` 字节（不含结尾的换行）。
+async fn read_line_capped<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+    buf: &mut Vec<u8>,
+    limit: usize,
+) -> std::io::Result<LineRead> {
+    buf.clear();
+    // 最多读 limit + 1 字节：多出来的那一个字节用来区分“正好 limit 字节加换行”和“更长”
+    let read = (&mut *reader)
+        .take(limit as u64 + 1)
+        .read_until(b'\n', buf)
+        .await?;
+    Ok(if read == 0 {
+        LineRead::Eof
+    } else if buf.last() == Some(&b'\n') || read <= limit {
+        LineRead::Complete
+    } else {
+        LineRead::TooLong
+    })
+}
+
+/// 丢弃当前这一行剩下的部分（直到换行或流结束）。
+async fn skip_rest_of_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> std::io::Result<()> {
+    loop {
+        let chunk = reader.fill_buf().await?;
+        if chunk.is_empty() {
+            return Ok(());
+        }
+        match chunk.iter().position(|&byte| byte == b'\n') {
+            Some(newline) => {
+                reader.consume(newline + 1);
+                return Ok(());
+            }
+            None => {
+                let length = chunk.len();
+                reader.consume(length);
+            }
+        }
     }
 }
 
-async fn read_stdout(stdout: ChildStdout, shared: Arc<Shared>) {
+/// 转发 sidecar 的 stderr 到调试日志。不合法的 UTF-8 按替换字符处理（不能因此停止读取，否则管道写满后 sidecar 会被卡住），
+/// 过长的行只记开头。
+async fn forward_stderr(stderr: ChildStderr, generation: u64, pid: Option<u32>) {
+    let mut reader = BufReader::new(stderr);
+    let mut buf = Vec::new();
+    loop {
+        let read = read_line_capped(&mut reader, &mut buf, STDERR_LINE_BYTES).await;
+        let Ok(kind) = read else { break };
+        if kind == LineRead::Eof {
+            break;
+        }
+        let line = String::from_utf8_lossy(&buf);
+        log::debug!(
+            target: "efv::sidecar",
+            "#{generation} (pid {pid:?}): {}",
+            truncate(line.trim_end_matches(['\r', '\n']))
+        );
+        if kind == LineRead::TooLong && skip_rest_of_line(&mut reader).await.is_err() {
+            break;
+        }
+    }
+}
+
+/// 读取 stdout 结束的原因。
+#[derive(Debug, PartialEq, Eq)]
+enum StdoutEnd {
+    /// 流正常结束。
+    Closed,
+    /// 读取出错。
+    Failed,
+    /// 有一行超过上限；已经让进行中的请求以协议错误返回，进程应当立即结束。
+    LineTooLong,
+}
+
+async fn read_stdout(stdout: ChildStdout, shared: Arc<Shared>, max_line: usize) -> StdoutEnd {
     let mut reader = BufReader::new(stdout);
     let mut buf = Vec::new();
     loop {
-        buf.clear();
-        match reader.read_until(b'\n', &mut buf).await {
-            Ok(0) => break,
-            Ok(_) => {
+        match read_line_capped(&mut reader, &mut buf, max_line).await {
+            Ok(LineRead::Eof) => return StdoutEnd::Closed,
+            Ok(LineRead::Complete) => {
                 // 不合法的 UTF-8 不应该让读取中断，按替换字符处理，后面解析 JSON 时会被当作非 JSON 行忽略
                 let line = String::from_utf8_lossy(&buf);
                 handle_line(&shared, line.trim_end_matches(['\r', '\n']));
+                // 别让一条很大的消息撑大的缓冲区一直占着内存
+                if buf.capacity() > 1024 * 1024 {
+                    buf = Vec::new();
+                }
+            }
+            Ok(LineRead::TooLong) => {
+                log::warn!(
+                    "sidecar #{}: a line on stdout is longer than {max_line} bytes; stopping the sidecar",
+                    shared.generation
+                );
+                shared.close(SidecarError::Protocol {
+                    message: format!("the sidecar wrote a line longer than {max_line} bytes"),
+                });
+                return StdoutEnd::LineTooLong;
             }
             Err(e) => {
                 log::warn!("sidecar #{}: failed to read stdout: {e}", shared.generation);
-                break;
+                return StdoutEnd::Failed;
             }
         }
     }
@@ -389,7 +492,7 @@ fn handle_line(shared: &Shared, line: &str) {
 /// 监管进程：等它退出（自己退出、被要求退出或强制结束），回收后让所有进行中的请求返回。
 async fn supervise(
     mut child: tokio::process::Child,
-    mut reader: JoinHandle<()>,
+    mut reader: JoinHandle<StdoutEnd>,
     stop: oneshot::Receiver<Stop>,
     shared: Arc<Shared>,
     exited: watch::Sender<bool>,
@@ -400,10 +503,16 @@ async fn supervise(
 
     let status = tokio::select! {
         status = child.wait() => status,
-        _ = &mut reader => {
-            // stdout 关闭了而进程还在：不再可用，给它一点时间退出，否则结束它
+        ended = &mut reader => {
             reader_done = true;
-            wait_or_kill(&mut child, STDOUT_CLOSED_GRACE, generation).await
+            // 有一行超过上限：协议已经不可信，立即结束；
+            // stdout 关闭了而进程还在：不再可用，给它一点时间退出，否则结束它
+            let grace = if matches!(ended, Ok(StdoutEnd::LineTooLong)) {
+                Duration::ZERO
+            } else {
+                STDOUT_CLOSED_GRACE
+            };
+            wait_or_kill(&mut child, grace, generation).await
         }
         stop = stop => {
             // 发送方被丢弃（连接没有经过 shutdown 就被丢掉）等同于不给宽限时间
@@ -555,6 +664,93 @@ mod tests {
             }
         );
         assert!(!s.alive.load(Ordering::SeqCst));
+    }
+
+    // ---- 单行长度上限
+
+    async fn read_all(input: &[u8], limit: usize) -> Vec<(LineRead, Vec<u8>)> {
+        let mut reader = BufReader::new(input);
+        let mut buf = Vec::new();
+        let mut out = Vec::new();
+        loop {
+            let kind = read_line_capped(&mut reader, &mut buf, limit)
+                .await
+                .unwrap();
+            if kind == LineRead::Eof {
+                return out;
+            }
+            out.push((kind, buf.clone()));
+            if out.len() > 10 {
+                panic!("too many lines");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn lines_up_to_the_limit_are_read_whole() {
+        let lines = read_all(b"abc\nde\r\nlast", 5).await;
+        assert_eq!(
+            lines,
+            [
+                (LineRead::Complete, b"abc\n".to_vec()),
+                (LineRead::Complete, b"de\r\n".to_vec()),
+                // 流结束前最后一行没有换行，也算一行
+                (LineRead::Complete, b"last".to_vec()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_line_of_exactly_the_limit_is_accepted_and_one_more_byte_is_too_long() {
+        // 内容正好 5 字节加换行：合法
+        let exact = read_all(b"12345\n", 5).await;
+        assert_eq!(exact, [(LineRead::Complete, b"12345\n".to_vec())]);
+        // 没有换行结尾、正好 5 字节：也合法
+        let exact_eof = read_all(b"12345", 5).await;
+        assert_eq!(exact_eof, [(LineRead::Complete, b"12345".to_vec())]);
+        // 内容 6 字节：超限，只读了开头 limit + 1 个字节
+        let over = read_all(b"123456\nnext\n", 5).await;
+        assert_eq!(over[0], (LineRead::TooLong, b"123456".to_vec()));
+    }
+
+    #[tokio::test]
+    async fn the_rest_of_a_too_long_line_can_be_skipped() {
+        let mut reader = BufReader::new(&b"0123456789ABCDEF\nnext\n"[..]);
+        let mut buf = Vec::new();
+        assert_eq!(
+            read_line_capped(&mut reader, &mut buf, 4).await.unwrap(),
+            LineRead::TooLong
+        );
+        skip_rest_of_line(&mut reader).await.unwrap();
+        assert_eq!(
+            read_line_capped(&mut reader, &mut buf, 4).await.unwrap(),
+            LineRead::Complete
+        );
+        assert_eq!(buf, b"next\n");
+        // 没有换行的流：一直丢到结束
+        let mut reader = BufReader::new(&b"no newline at all"[..]);
+        skip_rest_of_line(&mut reader).await.unwrap();
+        assert_eq!(
+            read_line_capped(&mut reader, &mut buf, 4).await.unwrap(),
+            LineRead::Eof
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_utf8_does_not_stop_reading() {
+        let lines = read_all(b"\xff\xfe broken\nok\n", 64).await;
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            String::from_utf8_lossy(&lines[0].1),
+            "\u{fffd}\u{fffd} broken\n"
+        );
+    }
+
+    #[test]
+    fn shutdown_budget_stays_under_five_seconds() {
+        // 退出的总时长 = 宽限期 + 读完最后几行输出的时间（启动握手会在退出时被打断，不再计入）
+        let total = super::super::protocol::Timeouts::default().shutdown_grace + STDOUT_DRAIN;
+        assert!(total < Duration::from_secs(5), "{total:?}");
     }
 
     #[test]

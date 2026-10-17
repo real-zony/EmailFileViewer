@@ -29,6 +29,10 @@ tauri-plugin-store = "2"
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "rt", "macros"] }
 url = "2"
 
+# 给 macOS 上提取和保存的附件写 com.apple.quarantine 扩展属性（src/quarantine.rs）
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
 [profile.release]
 # 发布的程序里不带符号表和调试信息（体积更小，deb 和 AppImage 里的可执行文件也不会带 .symtab）
 strip = true

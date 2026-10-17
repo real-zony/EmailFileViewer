@@ -670,6 +670,35 @@ mod coordinator_tests {
     }
 
     #[tokio::test]
+    async fn a_launch_argument_that_does_not_exist_is_reported_as_unreadable() {
+        // 命令行里的路径不存在：不能静默忽略，要像其他打不开的文件一样得到失败事件，文件名是它的名字
+        let (coordinator, events, _service) = coordinator();
+        coordinator.app_ready();
+        let args = ["app", "missing-mail.eml", "ok.eml"];
+        coordinator.submit(crate::fileargs::paths_from_args(&args, Path::new("/work")));
+        let all = wait_for(&events, 3).await;
+        assert_eq!(
+            (
+                all[0].0.as_str(),
+                all[0].1["fileName"].as_str(),
+                all[0].1["code"].as_str()
+            ),
+            (
+                "efv://document-open-failed",
+                Some("missing-mail.eml"),
+                Some("unreadable")
+            )
+        );
+        assert_eq!(all[1].1["fileName"], "ok.eml");
+        assert_eq!(
+            all[2].1,
+            serde_json::json!({ "batchId": 1, "opened": 1, "failed": 1 })
+        );
+        // 失败事件里只有文件名，没有补全后的完整路径
+        assert!(!all[0].1.to_string().contains("/work"), "{}", all[0].1);
+    }
+
+    #[tokio::test]
     async fn an_empty_drop_or_empty_dialog_result_produces_no_events() {
         let (coordinator, events, _service) = coordinator();
         coordinator.app_ready();

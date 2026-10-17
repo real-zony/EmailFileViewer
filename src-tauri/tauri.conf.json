@@ -28,6 +28,7 @@
     "targets": ["nsis", "dmg", "appimage", "deb"],
     "publisher": "real-zony",
     "copyright": "Copyright © 2026 Zony",
+    "license": "MIT",
     "category": "Productivity",
     "shortDescription": "Desktop viewer for .eml and .msg email files",
     "longDescription": "EmailFileViewer opens .eml and .msg email files and shows them safely on your computer. Messages are parsed locally; nothing is uploaded unless you choose to.",
@@ -43,6 +44,7 @@
     "fileAssociations": [
       {
         "ext": ["eml"],
+        "contentTypes": ["com.apple.mail.email"],
         "name": "Email message",
         "description": "Email message (.eml)",
         "mimeType": "message/rfc822",

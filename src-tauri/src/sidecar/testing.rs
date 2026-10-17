@@ -32,16 +32,27 @@ pub(crate) fn timeouts() -> Timeouts {
         save: Duration::from_secs(5),
         save_all: Duration::from_secs(5),
         shutdown_grace: Duration::from_secs(2),
+        // 测试里经常连续制造失败，默认不退避；要测退避的用例自己设
+        start_backoff: Duration::ZERO,
+        start_backoff_max: Duration::ZERO,
     }
 }
 
-pub(crate) fn service_with(envs: &[(&str, &str)], timeouts: Timeouts) -> SidecarService {
+/// 启动假 sidecar 的命令，`envs` 是传给它的环境变量。
+pub(crate) fn fake_command(envs: &[(&str, &str)]) -> SidecarCommand {
     let mut command = SidecarCommand::stdio(fake_program());
     command.envs = envs
         .iter()
         .map(|(k, v)| ((*k).into(), (*v).into()))
         .collect();
-    SidecarService::new(SidecarConfig { command, timeouts })
+    command
+}
+
+pub(crate) fn service_with(envs: &[(&str, &str)], timeouts: Timeouts) -> SidecarService {
+    SidecarService::new(SidecarConfig {
+        command: fake_command(envs),
+        timeouts,
+    })
 }
 
 pub(crate) fn service() -> SidecarService {

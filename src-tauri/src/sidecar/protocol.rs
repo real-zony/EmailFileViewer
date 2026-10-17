@@ -70,7 +70,13 @@ pub struct Timeouts {
     /// `attachment.saveAll`。
     pub save_all: Duration,
     /// 退出时关闭 stdin 之后等待进程自己退出的时间（它要清理临时目录），超时则强制结束。
+    /// 退出的总时长最多是它加上读完最后几行输出的 1 秒，所以默认值要让两者之和在 5 秒以内。
     pub shutdown_grace: Duration,
+    /// 启动失败（进程起不来或握手没通过）之后，第一次退避的时间：这段时间内的请求直接失败，不再启动进程。
+    /// 此后每连续失败一次翻倍，最多 `start_backoff_max`；启动成功后清零。为零则不退避。
+    pub start_backoff: Duration,
+    /// 启动退避的上限。
+    pub start_backoff_max: Duration,
 }
 
 impl Default for Timeouts {
@@ -83,6 +89,8 @@ impl Default for Timeouts {
             save: Duration::from_secs(60),
             save_all: Duration::from_secs(120),
             shutdown_grace: Duration::from_secs(3),
+            start_backoff: Duration::from_millis(500),
+            start_backoff_max: Duration::from_secs(10),
         }
     }
 }
@@ -290,6 +298,8 @@ mod tests {
         let t = Timeouts::default();
         assert_eq!(t.handshake, Duration::from_secs(15));
         assert_eq!(t.shutdown_grace, Duration::from_secs(3));
+        assert_eq!(t.start_backoff, Duration::from_millis(500));
+        assert_eq!(t.start_backoff_max, Duration::from_secs(10));
         assert_eq!(t.for_method(method::PING), Duration::from_secs(5));
         assert_eq!(t.for_method(method::EMAIL_OPEN), Duration::from_secs(30));
         assert_eq!(

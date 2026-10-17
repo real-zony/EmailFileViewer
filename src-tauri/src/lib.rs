@@ -4,6 +4,7 @@ mod fileargs;
 mod links;
 mod menu;
 mod opening;
+mod quarantine;
 mod settings;
 pub mod sidecar;
 
@@ -178,7 +179,8 @@ pub fn run() {
 
             // 启动参数里的文件（Windows、Linux 上双击文件，或命令行指定）；macOS 的双击走 RunEvent::Opened。
             // 前端调用 app_ready 之前先排队。
-            let args: Vec<String> = std::env::args().collect();
+            // 用 args_os：文件名不是合法的 UTF-8 时 std::env::args() 会 panic
+            let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
             let cwd = std::env::current_dir().unwrap_or_default();
             let mut paths = fileargs::paths_from_args(&args, &cwd);
             paths.append(&mut EARLY.lock().unwrap());

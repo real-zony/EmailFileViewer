@@ -20,6 +20,11 @@ pub fn is_external_link(url: &Url) -> bool {
 
 /// 是不是应用自己的页面：打包后是 `tauri://localhost`（macOS、Linux）或 `http(s)://tauri.localhost`（Windows），
 /// 开发时是 dev server；`about:blank` 和 `about:srcdoc`（邮件正文的 iframe）也属于应用。
+///
+/// `about:srcdoc#锚点` 也算：邮件正文 iframe 里指向 `about:srcdoc#section` 的页内锚点链接是文档内的滚动，不会加载任何东西。
+/// WebView 会为它调用导航回调（macOS 的 WKWebView 实测会，并且把 `#` 写成 `%23`：`about:srcdoc%23section`，一并认得），
+/// 不应该因为回调拒绝而影响滚动。带查询串的（`about:srcdoc?x`）不是页内锚点，不算。
+/// 这里只回答“是不是应用的页面”；要不要放行导航见 [`is_navigation_allowed`]。
 pub fn is_app_url(url: &Url, dev_url: Option<&Url>) -> bool {
     match url.scheme() {
         "tauri" => url.host_str() == Some("localhost"),
@@ -27,9 +32,23 @@ pub fn is_app_url(url: &Url, dev_url: Option<&Url>) -> bool {
             url.host_str() == Some("tauri.localhost")
                 || dev_url.is_some_and(|dev| dev.origin() == url.origin())
         }
-        "about" => matches!(url.as_str(), "about:blank" | "about:srcdoc"),
+        "about" => {
+            let path = url.path();
+            url.query().is_none()
+                && (matches!(path, "blank" | "srcdoc") || path.starts_with("srcdoc%23"))
+        }
         _ => false,
     }
+}
+
+/// 主窗口里的导航（包括邮件正文 iframe 里的）要不要放行：应用自己的页面，但应用页面带 fragment 的地址除外。
+///
+/// 邮件正文是 `srcdoc` iframe，文档地址是 `about:srcdoc`，而相对地址按父页面解析：里面的 `<a href="#x">`
+/// 和 `<a href="#">` 导航到的是 `tauri://localhost#x`。macOS 上实测放行它，iframe 会被换成应用自己的页面，
+/// 邮件正文整个消失。应用自己从不导航到带 fragment 的地址，所以拒绝：这样页内锚点至少不会毁掉正文。
+/// （要让锚点真的滚动，链接得指向 `about:srcdoc#x`，由 Core 的清理器改写。）
+pub fn is_navigation_allowed(url: &Url, dev_url: Option<&Url>) -> bool {
+    is_app_url(url, dev_url) && (url.scheme() == "about" || url.fragment().is_none())
 }
 
 /// 用系统默认程序打开。失败只记日志：用户点了一个链接，没有更好的补救办法。
@@ -54,10 +73,10 @@ pub fn on_new_window(app: &AppHandle<Wry>, url: &Url) -> NewWindowResponse<Wry> 
     NewWindowResponse::Deny
 }
 
-/// 主窗口的导航：应用自己的页面放行；其他地址不在应用内加载，放行的 scheme 交给系统。
+/// 主窗口的导航：应用自己的页面放行（见 [`is_navigation_allowed`]）；其他地址不在应用内加载，放行的 scheme 交给系统。
 pub fn on_navigation(app: &AppHandle<Wry>, url: &Url) -> bool {
     let dev_url = app.config().build.dev_url.as_ref();
-    if is_app_url(url, dev_url) {
+    if is_navigation_allowed(url, dev_url) {
         return true;
     }
     if is_external_link(url) {
@@ -119,6 +138,81 @@ mod tests {
             "http://localhost:1420/?showcase",
         ] {
             assert!(is_app_url(&url(app), Some(&dev)), "{app}");
+        }
+    }
+
+    #[test]
+    fn in_page_anchors_of_the_message_frame_are_allowed() {
+        // 邮件正文 iframe 里的 <a href="#section"> 导航到 about:srcdoc#section（macOS 上会经过导航回调）
+        for anchor in [
+            "about:srcdoc#section",
+            "about:srcdoc#",
+            "about:srcdoc#top",
+            "about:srcdoc#%E7%AC%AC%E4%B8%80%E7%AB%A0",
+            "about:srcdoc#a/b?c",
+            "about:blank#x",
+            // macOS 的 WKWebView 报告的写法
+            "about:srcdoc%23section",
+            "about:srcdoc%23",
+        ] {
+            assert!(is_app_url(&url(anchor), None), "{anchor}");
+            assert!(is_navigation_allowed(&url(anchor), None), "{anchor}");
+        }
+    }
+
+    #[test]
+    fn app_pages_with_a_fragment_are_not_navigable() {
+        // 邮件正文 iframe 里的 <a href="#x"> 按父页面的地址解析成 tauri://localhost#x（macOS 实测）；
+        // 放行会把 iframe 换成应用自己的页面
+        let dev = url("http://localhost:1420/");
+        for blocked in [
+            "tauri://localhost#x",
+            "tauri://localhost/#",
+            "tauri://localhost/index.html#section",
+            "http://tauri.localhost/#x",
+            "https://tauri.localhost/#x",
+            "http://localhost:1420/#x",
+        ] {
+            assert!(is_app_url(&url(blocked), Some(&dev)), "{blocked}");
+            assert!(
+                !is_navigation_allowed(&url(blocked), Some(&dev)),
+                "{blocked}"
+            );
+        }
+        // 没有 fragment 的照常放行
+        for allowed in [
+            "tauri://localhost/",
+            "tauri://localhost",
+            "http://localhost:1420/?showcase",
+            "about:srcdoc",
+            "about:blank",
+        ] {
+            assert!(
+                is_navigation_allowed(&url(allowed), Some(&dev)),
+                "{allowed}"
+            );
+        }
+        // 别的地址当然也不放行
+        assert!(!is_navigation_allowed(&url("https://example.com/#x"), None));
+    }
+
+    #[test]
+    fn other_about_urls_stay_blocked_even_with_an_anchor() {
+        for blocked in [
+            "about:config",
+            "about:config#srcdoc",
+            "about:srcdoc?x=1",
+            "about:srcdoc?x=1#y",
+            "about:srcdoc/extra",
+            "about:srcdoc2",
+            "about:blank?x",
+            "about:",
+            "about:Srcdoc2#x",
+            "about:srcdoc%2Fx",
+            "about:srcdoc%23x?y",
+            "about:blank%23x",
+        ] {
+            assert!(!is_app_url(&url(blocked), None), "{blocked}");
         }
     }
 

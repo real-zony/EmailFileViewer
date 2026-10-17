@@ -12,6 +12,8 @@ Releases are built by GitHub Actions ([`.github/workflows/release.yml`](../.gith
 | Linux x64 | `ubuntu-22.04` | `x86_64-unknown-linux-gnu` | `EmailFileViewer_<version>_amd64.AppImage`, `EmailFileViewer_<version>_amd64.deb` |
 | All | | | `SHA256SUMS.txt` |
 
+These are exactly the files the workflow uploads (checked against the `v0.0.1-test` run): five installers plus `SHA256SUMS.txt`. There is no `.app.tar.gz`, `.sig` or `latest.json`, because no updater is configured (`uploadUpdaterJson` and `uploadUpdaterSignatures` are off and `createUpdaterArtifacts` is not set). If you ever turn the updater on, the macOS jobs also upload `EmailFileViewer.app.tar.gz` and its `.sig`; add them to this table and to the `checksums` job's check list in the workflow.
+
 Notes:
 
 - Linux is built on Ubuntu 22.04 on purpose. A program built against an older glibc runs on more distributions.
@@ -20,6 +22,9 @@ Notes:
 - On Linux, the `.desktop` file (for both the `.deb` and the AppImage) comes from `src-tauri/linux/main.desktop`. It differs from Tauri's default template only by `Exec=... %F`: without it, the desktop environment starts the app without the file you double-clicked, so the `.eml` / `.msg` file association would not open anything.
 - The installers contain no debug symbols (no `.dSYM`, `.pdb` or `.dbg` files; the release profile strips the Rust binary).
 - Each platform job runs the parser tests (`dotnet test core`) and the sidecar smoke test before it builds the installer. A failure stops that platform's upload.
+- The smoke test runs a second time after the installer is built, on the sidecar that went into the installer. Tauri's `beforeBuildCommand` publishes the sidecar again, so the file the first smoke test ran on is not the one that gets packaged. On Windows (NSIS) and Linux (deb, AppImage) the packaged copy is the file at `src-tauri/binaries/efv-sidecar-<target>`, which does not change after the build. On macOS the step runs the copy inside `EmailFileViewer.app/Contents/MacOS` (the signed one) and also runs `codesign --verify --deep --strict` on the app. This step runs after the upload, so when it fails the `checksums` job does not run: do not publish that draft.
+- The license is MIT. It is declared in `Cargo.toml` and, explicitly, as `bundle.license` in `tauri.conf.json`. The Tauri bundler currently reads that field only for RPM packages, which this project does not build, so none of the five installers shows it; the NSIS installer would show a license page only if `bundle.licenseFile` were set.
+- The macOS app declares `.eml` through its UTI (`com.apple.mail.email`, `LSItemContentTypes`) as well as by extension, so Finder's *Open With* lists the app for both `.eml` and `.msg` files. `.msg` has no system UTI; it is matched by extension.
 
 ## Release steps
 
@@ -59,7 +64,12 @@ Push a throwaway tag such as `v0.0.1-test`. You get a pre-release draft with ins
 
 Secrets are configured under *Settings → Secrets and variables → Actions → New repository secret*.
 
-**None of them are needed until the signing tasks (9.4 for macOS, 9.5 for Windows).** Without them the workflow still succeeds and produces **unsigned** installers: macOS shows an "unidentified developer" warning, and Windows SmartScreen shows "Unknown publisher". Unsigned builds are fine for testing the pipeline but must not be published as a real release.
+**None of them are needed until the signing tasks (9.4 for macOS, 9.5 for Windows).** Without them the workflow still succeeds:
+
+- **macOS** builds are **ad-hoc signed** (the workflow sets `APPLE_SIGNING_IDENTITY=-` when `APPLE_CERTIFICATE` and `APPLE_SIGNING_IDENTITY` are both empty). Tauri signs the sidecar, the main executable and the whole `.app`, and the workflow verifies the result with `codesign --verify --deep --strict`. An ad-hoc signature identifies no developer, so Gatekeeper still blocks the first launch of a downloaded copy; see [Opening an unsigned macOS build](#opening-an-unsigned-macos-build). A build whose `.app` has no valid signature at all is worse: a downloaded copy is commonly reported on Apple Silicon as "damaged and can't be opened", and *Privacy & Security* offers no *Open Anyway* for it.
+- **Windows** builds are **unsigned**: SmartScreen shows "Unknown publisher".
+
+Such builds are fine for testing the pipeline and for hand-picked testers, but must not be published as a real release.
 
 Only secrets that are set are passed to the build. (The Tauri CLI treats a variable that is set but empty as a real value and fails on it, so a step in the `build` job exports only the non-empty ones.)
 
@@ -75,6 +85,22 @@ Only secrets that are set are passed to the build. (The Tauri CLI treats a varia
 | `WINDOWS_CERTIFICATE_PASSWORD` | Reserved: the password of the `.pfx` file. | 9.5 |
 
 The workflow only forwards these values to the build. Actually signing also needs changes that belong to 9.4 and 9.5: the signing and notarization checks (`codesign -dv`, `spctl -a -vv`) on macOS, and the signing configuration (`certificateThumbprint` or `signCommand` under `bundle.windows` in `tauri.conf.json`) on Windows. `GITHUB_TOKEN` is provided by GitHub and needs no setup; the workflow asks for `contents: write` only.
+
+## Opening an unsigned macOS build
+
+This applies to builds made without the Apple secrets (ad-hoc signed, not notarized). Once the Developer ID signing and notarization of task 9.4 are in place, none of this is needed.
+
+1. Open the `.dmg` and drag `EmailFileViewer` into `Applications`.
+2. Double-click the app. macOS says it cannot verify that the app is free of malware. Click **Done** (do not move it to the Bin).
+3. Open **System Settings → Privacy & Security**, scroll down to the *Security* section, and click **Open Anyway** next to "EmailFileViewer was blocked to protect your Mac". Confirm with your password or Touch ID, then click **Open**. This is needed only once.
+
+On macOS 15 and later, Control-click → *Open* no longer gets past this prompt; use *Privacy & Security* as above. Without the settings page, this Terminal command removes the quarantine flag that the browser put on the download:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/EmailFileViewer.app
+```
+
+If macOS says the app is **damaged**, the build was not signed at all (for example it was built outside the workflow); the steps above do not help in that case.
 
 ## Verifying SHA-256
 
@@ -106,4 +132,5 @@ An `OK` from `sha256sum` or `shasum`, or two identical hashes in PowerShell, mea
 ## Maintenance notes
 
 - GitHub plans to retire the `macos-15-intel` runner in autumn 2027. Then switch the Intel build to `macos-26-intel`, or cross-compile it on an Apple Silicon runner (the sidecar script already supports `x86_64-apple-darwin` and `universal-apple-darwin` on macOS).
+- The `macos-latest` and `macos-15-intel` jobs are the only ones that sign. When the Developer ID certificate is configured (9.4), the same step still verifies the signature; add the notarization checks (`spctl -a -vv`) there.
 - The workflow installs the Tauri CLI as a prebuilt binary (`cargo binstall tauri-cli`, any 2.x release) and runs it through `tauri-apps/tauri-action@v1` with `tauriScript: cargo tauri`, the same CLI as local development.
