@@ -1,18 +1,18 @@
 # Releasing EmailFileViewer
 
-Releases are built by GitHub Actions ([`.github/workflows/release.yml`](../.github/workflows/release.yml)) when a tag that starts with `v` is pushed. The workflow builds the installers on four runners, uploads them to a **draft** GitHub Release, and adds a `SHA256SUMS.txt` file. Nothing is published until you publish the draft yourself.
+Releases are built by GitHub Actions ([`.github/workflows/release.yml`](../.github/workflows/release.yml)) when a tag that starts with `v` is pushed. The workflow builds the installers on four runners (the Windows runner also zips a portable edition), uploads them to a **draft** GitHub Release, and adds a `SHA256SUMS.txt` file. Nothing is published until you publish the draft yourself.
 
 ## What a release contains
 
 | Platform | Runner | Target | Files |
 | --- | --- | --- | --- |
-| Windows 10 1809+ / 11, x64 | `windows-latest` | `x86_64-pc-windows-msvc` | `EmailFileViewer_<version>_x64-setup.exe` (NSIS) |
+| Windows 10 1809+ / 11, x64 | `windows-latest` | `x86_64-pc-windows-msvc` | `EmailFileViewer_<version>_x64-setup.exe` (NSIS), `EmailFileViewer_<version>_x64-portable.zip` ([portable edition](#windows-portable-edition)) |
 | macOS 15+, Apple Silicon | `macos-latest` | `aarch64-apple-darwin` | `EmailFileViewer_<version>_aarch64.dmg` |
 | macOS 15+, Intel | `macos-15-intel` | `x86_64-apple-darwin` | `EmailFileViewer_<version>_x64.dmg` |
 | Linux x64 | `ubuntu-22.04` | `x86_64-unknown-linux-gnu` | `EmailFileViewer_<version>_amd64.AppImage`, `EmailFileViewer_<version>_amd64.deb` |
 | All | | | `SHA256SUMS.txt` |
 
-These are exactly the files the workflow uploads (checked against the `v0.0.1-test` run): five installers plus `SHA256SUMS.txt`. There is no `.app.tar.gz`, `.sig` or `latest.json`, because no updater is configured (`uploadUpdaterJson` and `uploadUpdaterSignatures` are off and `createUpdaterArtifacts` is not set). If you ever turn the updater on, the macOS jobs also upload `EmailFileViewer.app.tar.gz` and its `.sig`; add them to this table and to the `checksums` job's check list in the workflow.
+A release has six files plus `SHA256SUMS.txt`. The `v0.0.1-test` run (before the portable zip existed) confirmed what the Tauri step uploads: the five installers and nothing else. There is no `.app.tar.gz`, `.sig` or `latest.json`, because no updater is configured (`uploadUpdaterJson` and `uploadUpdaterSignatures` are off and `createUpdaterArtifacts` is not set). If you ever turn the updater on, the macOS jobs also upload `EmailFileViewer.app.tar.gz` and its `.sig`; add them to this table and to the `checksums` job's check list in the workflow.
 
 Notes:
 
@@ -23,8 +23,30 @@ Notes:
 - The installers contain no debug symbols (no `.dSYM`, `.pdb` or `.dbg` files; the release profile strips the Rust binary).
 - Each platform job runs the parser tests (`dotnet test core`) and the sidecar smoke test before it builds the installer. A failure stops that platform's upload.
 - The smoke test runs a second time after the installer is built, on the sidecar that went into the installer. Tauri's `beforeBuildCommand` publishes the sidecar again, so the file the first smoke test ran on is not the one that gets packaged. On Windows (NSIS) and Linux (deb) the packaged copy is the file at `src-tauri/binaries/efv-sidecar-<target>`, which does not change after the build. On macOS the step runs the copy inside `EmailFileViewer.app/Contents/MacOS` (the signed one) and also runs `codesign --verify --deep --strict` on the app. On Linux the AppImage is processed by linuxdeploy, which may rewrite files, so the step unpacks it with `--appimage-extract`, runs the smoke test on `usr/bin/efv-sidecar` inside it, and prints a notice if those bytes differ from the published sidecar (the smoke test of the unpacked copy is what counts). This step runs after the upload, so when it fails the `checksums` job does not run: do not publish that draft.
-- The license is MIT. It is declared in `Cargo.toml` and, explicitly, as `bundle.license` in `tauri.conf.json`. The Tauri bundler currently reads that field only for RPM packages, which this project does not build, so none of the five installers shows it; the NSIS installer would show a license page only if `bundle.licenseFile` were set.
+- The license is MIT. It is declared in `Cargo.toml` and, explicitly, as `bundle.license` in `tauri.conf.json`. The Tauri bundler currently reads that field only for RPM packages, which this project does not build, so none of the installers shows it; the NSIS installer would show a license page only if `bundle.licenseFile` were set.
 - The macOS app declares `.eml` through its UTI (`com.apple.mail.email`, `LSItemContentTypes`) as well as by extension, so Finder's *Open With* lists the app for both `.eml` and `.msg` files. `.msg` has no system UTI; it is matched by extension.
+
+## Windows portable edition
+
+`EmailFileViewer_<version>_x64-portable.zip` runs without installing, without administrator rights and without touching the registry or the file associations. It is the **same binary** as the installed edition (nothing is compiled separately), plus these files at the root of the zip:
+
+| File in the zip | Where it comes from |
+| --- | --- |
+| `EmailFileViewer.exe` | `src-tauri/target/<target>/release/emailfileviewer.exe`, renamed (the built file is named after the Cargo package) |
+| `efv-sidecar.exe` | `src-tauri/binaries/efv-sidecar-<target>.exe`, the file the NSIS installer packs too (the workflow checks the zip's copy is byte-identical and runs the smoke test on it) |
+| `EmailFileViewer.portable` | `src-tauri/windows/portable/EmailFileViewer.portable`, the marker file |
+| `README.txt` | `src-tauri/windows/portable/README.txt` (English; converted to CRLF line endings when zipped) |
+
+How it works (design.md D13):
+
+- The program looks for `EmailFileViewer.portable` in its own folder. If it is there, settings, WebView2 data and logs go to the `data` folder next to the exe: `data\settings.json`, `data\webview\`, `data\logs\`. The installed edition has no marker file and behaves as before.
+- Tauri's `appDirectoriesOverride` is set at run time to the `data` folder. That moves `app_data_dir`, `app_local_data_dir` and `app_log_dir`, so the settings store (read by the frontend and, before the first paint, by Rust) and `tauri-plugin-log` follow without any change in the frontend or in the capabilities. The WebView2 data folder is set explicitly when the window is created.
+- At start the program creates `data` (and `data\webview`) and writes and deletes a probe file. If that fails (for example the folder is in `C:\Program Files` or on read-only media), it logs a warning and falls back to the standard per-user folders of the installed edition, and keeps running.
+- Before any window is created the program asks for the WebView2 runtime version. If there is none (portable and installed edition alike), a native message box says so, shows `https://developer.microsoft.com/microsoft-edge/webview2/` (English or Simplified Chinese, by the system language) and the program exits. The portable edition never installs WebView2.
+- Attachments you open are still written to the system temporary folder and removed on exit.
+- The portable and the installed edition use the same application identity, so they share one running instance: whichever starts second hands its files to the first and exits. The README says so.
+
+Signing (task 9.5) must cover the two exe files **inside** the zip. `signCommand` signs the main exe in the build folder and the sidecar in `src-tauri/binaries` during the build, which are exactly the files copied into the zip, so the zip step runs after the build. The zip itself is not signed.
 
 ## Release steps
 
@@ -45,10 +67,10 @@ Notes:
 3. **Wait for the workflow** (Actions tab, workflow `release`). It runs these jobs:
    1. `create-release` creates the draft Release (or reuses an existing draft for the same tag).
    2. `build (...)`, four jobs in parallel, one per target. Each uploads its installers to the draft. One failing job does not stop the others; use *Re-run failed jobs* to fill in the missing files.
-   3. `checksums` runs after all four succeed. It downloads every installer from the draft, checks that all five installers are there, and uploads `SHA256SUMS.txt`. The checksums are also shown in the job summary.
+   3. `checksums` runs after all four succeed. It downloads every file from the draft, checks that all six are there (five installers and the Windows portable zip), and uploads `SHA256SUMS.txt`. The checksums are also shown in the job summary.
 
 4. **Check the draft** on the Releases page:
-   - The five installers and `SHA256SUMS.txt` are attached.
+   - The six files (five installers and the portable zip) and `SHA256SUMS.txt` are attached.
    - Edit the release notes (they are pre-filled with GitHub's generated notes).
    - Download an installer for the platform you have at hand and make sure it opens an `.eml` and a `.msg` file. [Verify its SHA-256](#verifying-sha-256) while you are at it.
 

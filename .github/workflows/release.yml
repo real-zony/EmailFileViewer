@@ -1,7 +1,8 @@
 name: release
 
-# 只在推送 v* 标签时运行：在四个平台上构建安装包，全部上传到同一个草稿 Release，
-# 最后生成 SHA256SUMS.txt 一并上传。Release 保持草稿，检查之后手动发布（步骤见 docs/release.md）。
+# 只在推送 v* 标签时运行：在四个平台上构建安装包（Windows 另外打一个免安装的绿色版 zip），
+# 全部上传到同一个草稿 Release，最后生成 SHA256SUMS.txt 一并上传。
+# Release 保持草稿，检查之后手动发布（步骤见 docs/release.md）。
 on:
   push:
     tags: ['v*']
@@ -280,7 +281,60 @@ jobs:
           fi
           "$packaged" --smoke samples
 
-  # 所有平台都上传完之后，对草稿 Release 里的安装包算 SHA-256，生成 SHA256SUMS.txt 传回去
+      # Windows 绿色版（design.md D13，任务 9.7）：和安装版是同一份二进制，加上 sidecar、标记文件和 README 打成 zip，
+      # 上传到同一个草稿 Release。zip 的内容（都在 zip 的根目录，解压到一个文件夹里就能用）：
+      #   EmailFileViewer.exe       主程序，构建出来的文件名是 Cargo 包名 emailfileviewer.exe，这里改名
+      #   efv-sidecar.exe           打包用的那一份 sidecar（src-tauri/binaries 里的，NSIS 安装包用的也是它）
+      #   EmailFileViewer.portable  标记文件：它在 exe 旁边，程序就进入绿色模式，数据放在旁边的 data 文件夹
+      #   README.txt                用法、数据位置、需要 WebView2、与安装版同时运行时的单实例行为
+      # 注意（任务 9.5）：Windows 代码签名必须覆盖 zip 里的两个 exe。signCommand 在构建时签的是构建目录里的主程序和
+      # src-tauri/binaries 里的 sidecar，也就是这里复制的两份，所以这一步要放在构建之后。如果以后把签名挪到构建之后
+      # 单独执行，就必须在这一步之前把这两个 exe 签好，并在下面解压检查时加上 signtool verify /pa。
+      - name: 打包 Windows 绿色版
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        run: |
+          command -v 7z > /dev/null || { echo "::error::找不到 7z"; exit 1; }
+          # 版本号和安装包一样取自 tauri.conf.json，不是标签
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          name="EmailFileViewer_${version}_x64-portable.zip"
+          release_dir="src-tauri/target/${{ matrix.target }}/release"
+          stage="portable-build/files"
+          rm -rf portable-build
+          mkdir -p "$stage"
+          cp "$release_dir/emailfileviewer.exe" "$stage/EmailFileViewer.exe"
+          cp "$SIDECAR_EXE" "$stage/efv-sidecar.exe"
+          cp src-tauri/windows/portable/EmailFileViewer.portable "$stage/EmailFileViewer.portable"
+          # README 用 Windows 的换行，记事本里排版才正常
+          sed 's/$/\r/' src-tauri/windows/portable/README.txt > "$stage/README.txt"
+          (cd "$stage" && 7z a -tzip -mx=9 "../$name" ./* > /dev/null)
+
+          # 解压出来检查：文件齐全、没有多余的 data 文件夹、sidecar 就是打包用的那一份并且能跑 smoke
+          check="portable-build/check"
+          mkdir -p "$check"
+          7z x -y -o"$check" "portable-build/$name" > /dev/null
+          7z l "portable-build/$name"
+          for file in EmailFileViewer.exe efv-sidecar.exe EmailFileViewer.portable README.txt; do
+            [ -f "$check/$file" ] || { echo "::error::zip 里缺少 ${file}"; exit 1; }
+          done
+          [ "$(find "$check" -mindepth 1 | wc -l)" -eq 4 ] || { echo "::error::zip 里的文件不是预期的 4 个"; find "$check"; exit 1; }
+          cmp "$SIDECAR_EXE" "$check/efv-sidecar.exe"
+          "$check/efv-sidecar.exe" --smoke samples
+
+          # 传到同一个草稿 Release；重新运行时先删掉旧的，上传同名文件会失败
+          old_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets" \
+            --jq ".[] | select(.name == \"${name}\") | .id")"
+          if [ -n "$old_id" ]; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${old_id}"
+          fi
+          gh api --method POST -H "Content-Type: application/zip" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${name}" \
+            --input "portable-build/${name}" > /dev/null
+          echo "已上传 ${name}"
+
+  # 所有平台都上传完之后，对草稿 Release 里的安装包（含 Windows 绿色版 zip）算 SHA-256，生成 SHA256SUMS.txt 传回去
   checksums:
     name: SHA-256 校验文件
     needs: [create-release, build]
@@ -305,12 +359,13 @@ jobs:
               "repos/${GITHUB_REPOSITORY}/releases/assets/${id}" > "assets/${name}"
           done < assets.tsv
 
-      # 少了任何一个平台的安装包，就不要生成校验文件，让整个发布流程失败
+      # 少了任何一个安装包（Windows 安装程序和绿色版 zip、两个 dmg、AppImage、deb，共 6 个），
+      # 就不要生成校验文件，让整个发布流程失败
       - name: 检查安装包是否齐全
         working-directory: assets
         run: |
           missing=0
-          for pattern in '_x64-setup\.exe$' '_aarch64\.dmg$' '_x64\.dmg$' '_amd64\.AppImage$' '_amd64\.deb$'; do
+          for pattern in '_x64-setup\.exe$' '_x64-portable\.zip$' '_aarch64\.dmg$' '_x64\.dmg$' '_amd64\.AppImage$' '_amd64\.deb$'; do
             found=0
             for file in *; do
               if [[ "$file" =~ $pattern ]]; then

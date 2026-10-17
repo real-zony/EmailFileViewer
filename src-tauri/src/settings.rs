@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// store 文件名。相对路径落在应用数据目录下，前端用 `LazyStore('settings.json')` 读写同一个文件。
+/// Windows 绿色版的应用数据目录是 exe 旁边的 `data`（见 `portable.rs`），这里和前端都不用改。
 pub const SETTINGS_FILE: &str = "settings.json";
 
 /// 初始化脚本模板，占位符在 [`initialization_script`] 中替换。前端有测试在 jsdom 里执行同一个文件。

@@ -1,0 +1,3 @@
+This file marks EmailFileViewer as the portable edition. While it sits next to
+EmailFileViewer.exe, settings and data are kept in the "data" folder next to it.
+Delete it to use the standard per-user folders instead. Do not rename it.

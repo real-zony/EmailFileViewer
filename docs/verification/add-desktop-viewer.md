@@ -1,6 +1,6 @@
 # add-desktop-viewer 手动验收
 
-本文对应 `openspec/changes/add-desktop-viewer/tasks.md` 的 9.6、10.1、10.2，同时收纳三处并入这里的人工项：5.6（真实拖放）、5.7（Windows 和 Linux 上的链接与新窗口拦截实验）、7.10（焦点在正文里时 ⌘W 仍能关闭标签页）。
+本文对应 `openspec/changes/add-desktop-viewer/tasks.md` 的 9.6、10.1、10.2，以及 9.7 里“验收清单有对应检查项”的部分（PORT 系列），同时收纳三处并入这里的人工项：5.6（真实拖放）、5.7（Windows 和 Linux 上的链接与新窗口拦截实验）、7.10（焦点在正文里时 ⌘W 仍能关闭标签页）。
 
 它既是操作手册，也是验收记录。顺序是：按第 1 章准备环境，按第 3 到 5 章逐项操作，把结果填进第 2 章的总表，失败的写进第 6 章。
 
@@ -32,6 +32,7 @@
 | 系统版本（含构建号） | | | | | | | |
 | 桌面环境与会话（Linux 写 GNOME 版本，X11 或 Wayland） | N/A | N/A | N/A | N/A | | | |
 | 安装包文件名 | | | | | | | |
+| 绿色版 zip 文件名与 SHA-256 是否一致（只测 Windows） | | | N/A | N/A | N/A | N/A | N/A |
 | 安装包 SHA-256 与 `SHA256SUMS.txt` 是否一致 | | | | | | | |
 | 应用版本（关于对话框里的 Version） | | | | | | | |
 | 安装前是否确认干净（Win10：无 .NET、无 WebView2） | | N/A | N/A | N/A | N/A | N/A | N/A |
@@ -47,7 +48,7 @@
 
    | 平台 | 安装包 |
    |------|--------|
-   | Windows 10 1809、Windows 11 | `EmailFileViewer_<版本>_x64-setup.exe` |
+   | Windows 10 1809、Windows 11 | `EmailFileViewer_<版本>_x64-setup.exe`，另外下载绿色版 `EmailFileViewer_<版本>_x64-portable.zip`（PORT 系列用） |
    | macOS 15 Apple Silicon | `EmailFileViewer_<版本>_aarch64.dmg` |
    | macOS 15 Intel | `EmailFileViewer_<版本>_x64.dmg` |
    | Ubuntu 22.04、Debian 13 | `EmailFileViewer_<版本>_amd64.deb` |
@@ -108,6 +109,14 @@ Select-String -Path .\SHA256SUMS.txt -Pattern 'x64-setup.exe'
 4. 安装过程中如果机器缺少 WebView2，安装程序会用内置的引导程序下载并安装，**此时机器必须能上网**（`docs/release.md`）。
 5. 默认按当前用户安装，不需要管理员权限，路径通常是 `%LOCALAPPDATA%\EmailFileViewer`。以安装程序实际显示的路径为准，记下来，UNINST-01 要用。
 6. 从开始菜单启动 EmailFileViewer。
+
+**Windows 绿色版（`EmailFileViewer_<版本>_x64-portable.zip`）**
+
+不需要安装。要求：机器上已经有 WebView2 运行时（缺少时的表现是 PORT-06 要测的内容）。
+
+1. 用浏览器下载 zip（带“来自网络”标记），在资源管理器里右键 → “全部提取”，解压到一个有写权限的文件夹，例如 `D:\Tools\EmailFileViewer-portable`。**不要**在 zip 里直接双击运行。
+2. 双击 `EmailFileViewer.exe`，SmartScreen 拦截时同上放行。
+3. 数据在 exe 旁边的 `data` 文件夹里（1.6）；不要和安装版混用同一个用户的状态来判断结果，PORT 系列的前置条件在每一项里写明。
 
 **macOS 15（Apple Silicon 和 Intel）**
 
@@ -197,6 +206,7 @@ chmod +x EmailFileViewer_<版本>_amd64.AppImage
 LOC-01、LOC-02、APPR-01、START-01 要在没有保存过设置的状态下首次启动。先**完全退出应用**，再删除设置文件：
 
 - Windows（PowerShell）：`Remove-Item "$env:APPDATA\com.github.realzony.emailfileviewer\settings.json" -ErrorAction SilentlyContinue`
+- Windows 绿色版：删除 exe 旁边的 `data\settings.json`（或整个 `data` 文件夹）。
 - macOS：`rm -f ~/Library/Application\ Support/com.github.realzony.emailfileviewer/settings.json`
 - Linux：`rm -f "${XDG_DATA_HOME:-$HOME/.local/share}/com.github.realzony.emailfileviewer/settings.json"`
 
@@ -244,6 +254,7 @@ sidecar 在第一次打开文件时才启动，空状态下没有它。
 1. 环境记录（1.1）、下载、校验（DIST-06）、安装（1.4）。
 2. **先做依赖“首次启动”的项**：START-01、LOC-01、LOC-02、APPR-01。每做完一项，按 1.6 重置设置。
 3. DIST-01 到 DIST-05、DIST-07、DIST-08。
+   - Windows 上另外做 PORT 系列：**PORT-06 要在装好 WebView2 之前做**（Win10 1809 的干净快照），其余 PORT-01 到 PORT-05、PORT-08 在没有安装版的状态下做，PORT-07 需要安装版和绿色版同时存在，最后做。
 4. 第 3 章的 OPEN、TAB、KEY、TITLE、VIEW、LINK、SMIME、ATT、LOC-03、LOC-04、APPR-02 之后各项。
 5. 第 4 章。抓包的几项（SEC-07、SEC-08）单独做，期间不要点链接，也不要做别的需要联网的事。
 6. **最后做第 5 章卸载**，做之前给虚拟机打快照。
@@ -265,6 +276,14 @@ sidecar 在第一次打开文件时才启动，空状态下没有它。
 | DIST-07 | macOS 签名与公证（9.4 完成后才有意义） | N/A | N/A |  |  | N/A | N/A | N/A |
 | DIST-08 | Windows 代码签名（9.5 完成后才有意义） |  |  | N/A | N/A | N/A | N/A | N/A |
 | START-01 | 首次启动时窗口没有闪白 |  |  |  |  |  |  |  |
+| PORT-01 | 绿色版：解压即用，能打开、查看邮件并保存附件 |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-02 | 绿色版：不留下注册表项和 `.eml` / `.msg` 文件关联 |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-03 | 绿色版：数据在程序旁的 `data` 里，整个文件夹复制到另一台电脑后设置保留 |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-04 | 绿色版：删除整个文件夹清除全部持久数据 |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-05 | 绿色版：程序目录不可写时退回标准目录并照常运行 |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-06 | 缺少 WebView2 时弹出系统对话框（Win11 用环境变量模拟） |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-07 | 绿色版与安装版同时运行：后启动的把文件交给先启动的 |  |  | N/A | N/A | N/A | N/A | N/A |
+| PORT-08 | 绿色版 zip 的内容正确，二进制与安装版相同 |  |  | N/A | N/A | N/A | N/A | N/A |
 
 **3.2 打开文件（email-opening）**
 
@@ -480,14 +499,15 @@ sidecar 在第一次打开文件时才启动，空状态下没有它。
   2. 打开仓库的 Actions 页，找到这个标签对应的 `release` 工作流运行。
   3. 在本地执行 `git rev-parse v0.1.0-test.1^{commit}`，与 Release 页面显示的提交对比。
 - **预期**：
-  - 附件恰好有 5 个安装包和 `SHA256SUMS.txt`：`EmailFileViewer_<版本>_x64-setup.exe`、`_aarch64.dmg`、`_x64.dmg`、`_amd64.AppImage`、`_amd64.deb`。
+  - 附件恰好有 6 个安装文件和 `SHA256SUMS.txt`：`EmailFileViewer_<版本>_x64-setup.exe`、`_x64-portable.zip`（Windows 绿色版）、`_aarch64.dmg`、`_x64.dmg`、`_amd64.AppImage`、`_amd64.deb`。
+  - `SHA256SUMS.txt` 里有这 6 个文件的哈希。
   - 工作流里 `create-release`、四个 `build` 任务和 `checksums` 任务都是成功状态。
   - Release 对应的提交就是标签指向的提交（安装包由 CI 从带版本标签的提交构建）。
 
 #### DIST-06 安装包的 SHA-256 与发布页一致
 - **规格**：app-distribution / 发布产物可追溯 / 校验下载的安装包
 - **样本**：无
-- **步骤**：按 1.3 在每台机器上校验自己下载的那个安装包。
+- **步骤**：按 1.3 在每台机器上校验自己下载的那个安装包（Windows 两台机器上还要校验绿色版的 zip）。
 - **预期**：命令输出 `OK`（或哈希完全相同）。
 
 #### DIST-07 macOS 签名与公证（9.4 完成后才有意义）
@@ -512,8 +532,8 @@ sidecar 在第一次打开文件时才启动，空状态下没有它。
   1. 在下载的安装程序上右键 → 属性，看有没有“数字签名”选项卡。
   2. 执行 `Get-AuthenticodeSignature .\EmailFileViewer_<版本>_x64-setup.exe | Format-List`。
   3. 双击运行，看 SmartScreen 或权限确认对话框里的发布者。
-  4. 安装后对安装目录下的主程序和 `efv-sidecar.exe` 各执行一次 `Get-AuthenticodeSignature`。
-- **预期**：`Status` 是 `Valid`；对话框里显示发布者名称，而不是“未知发布者”；主程序和 sidecar 都有有效签名。
+  4. 安装后对安装目录下的主程序和 `efv-sidecar.exe` 各执行一次 `Get-AuthenticodeSignature`；对绿色版 zip 里的 `EmailFileViewer.exe` 和 `efv-sidecar.exe` 也各执行一次（PORT-08）。
+- **预期**：`Status` 是 `Valid`；对话框里显示发布者名称，而不是“未知发布者”；主程序和 sidecar 都有有效签名，绿色版 zip 里的两个 exe 也一样（zip 本身不签名）。
 - **当前构建**：9.5 还没做，构建未签名。此时本项填 `N/A`，备注写“9.5 未完成”。
 
 #### START-01 首次启动时窗口没有闪白
@@ -526,6 +546,173 @@ sidecar 在第一次打开文件时才启动，空状态下没有它。
   4. 把语言设成简体中文，再启动 5 次，留意启动瞬间有没有先出现英文再变成中文。
 - **预期**：窗口出现时底色就是正确的颜色：第 2、3 步是深色，没有任何一帧是白色；第 4 步从第一帧起就是中文，没有英文一闪而过。
 - **判定**：只要有一次看到白闪或语言闪变，就记为失败，并在“现象”里写明是第几次、什么模式。
+
+#### PORT-01 绿色版解压即用
+- **规格**：app-distribution / Windows 绿色版免安装运行 / 解压即用
+- **样本**：`samples/headers-normal.eml`、`samples/attachments-pdf-xlsx-jpg.eml`
+- **前置**：机器上已经有 WebView2 运行时（Win10 1809 要先装好，但**还没有**装安装版，PORT-06 要在装好 WebView2 之前做）；用普通用户，不要以管理员运行；这个用户从没运行过本应用（最好用虚拟机快照）。
+- **步骤**：
+  1. 用浏览器下载 `EmailFileViewer_<版本>_x64-portable.zip`（1.2），按 1.3 校验 SHA-256。
+  2. 在资源管理器里右键 → “全部提取”（Extract All），解压到一个有写权限的文件夹，例如 `D:\Tools\EmailFileViewer-portable`。记下文件夹里有哪些文件，用记事本打开 `README.txt`。
+  3. 双击 `EmailFileViewer.exe`。SmartScreen 拦截时按 1.4 放行。
+  4. 打开 `samples/headers-normal.eml`。再打开 `samples/attachments-pdf-xlsx-jpg.eml`：保存其中一个附件到桌面，点“全部保存”（“Save all”）保存到一个空文件夹，再点 PDF 附件的“打开”（“Open”）用默认程序打开。
+  5. 把另一个 `.eml` 拖进窗口；再把一个 `.msg` 拖到 `EmailFileViewer.exe` 的图标上。
+  6. 退出，按 1.7 确认 `EmailFileViewer.exe` 和 `efv-sidecar.exe` 都已消失。
+- **预期**：
+  - 解压出来的文件夹里恰好 4 个文件：`EmailFileViewer.exe`、`efv-sidecar.exe`、`EmailFileViewer.portable`、`README.txt`；`README.txt` 在记事本里换行正常。
+  - 全程没有安装步骤，没有 UAC（管理员权限）提示；应用正常启动，邮件显示正确（EML 的主题是 `Quarterly planning meeting`）。
+  - 附件保存、全部保存、打开都正常；保存出来的文件带“来自网络”标记（`Get-Content -Path <文件> -Stream Zone.Identifier` 能读到 `ZoneId=3`）。
+  - 拖进窗口和拖到图标上都能打开邮件。
+  - 运行之后，文件夹里多了 `data` 文件夹；退出后没有残留进程。
+
+#### PORT-02 绿色版不留下注册表项和文件关联
+- **规格**：app-distribution / Windows 绿色版免安装运行 / 不留下注册表和文件关联
+- **样本**：`samples/headers-normal.eml`、`samples/body-rtf-only.msg`
+- **前置**：用一个从没运行过本应用的用户账户（或虚拟机快照），并且这台机器上没有安装版。**不要**在这一项里用资源管理器的“打开方式”选择本程序：那是系统自己记录的，会产生注册表项，不属于本应用。
+- **步骤**：
+  1. 运行之前记录状态：
+
+     ```powershell
+     reg export HKCU "$env:TEMP\hkcu-before.reg" /y
+     cmd /c assoc .eml
+     cmd /c assoc .msg
+     Get-ItemProperty 'HKCU:\Software\Classes\.eml','HKCU:\Software\Classes\.msg' -ErrorAction SilentlyContinue
+     Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.eml','HKLM:\SOFTWARE\Classes\.msg' -ErrorAction SilentlyContinue
+     ```
+
+     再看“设置 → 默认应用 → 按文件类型选择默认应用”里 `.eml`、`.msg` 的默认程序，截图。
+  2. 运行绿色版，打开 `samples/headers-normal.eml` 和 `samples/body-rtf-only.msg`，保存一个附件，把语言改成简体中文，退出。
+  3. 再导出一次并搜索：
+
+     ```powershell
+     reg export HKCU "$env:TEMP\hkcu-after.reg" /y
+     Select-String -Path "$env:TEMP\hkcu-after.reg" -Pattern 'EmailFileViewer','efv-sidecar','realzony' | Select-Object -First 20
+     Compare-Object (Get-Content "$env:TEMP\hkcu-before.reg") (Get-Content "$env:TEMP\hkcu-after.reg") | Measure-Object
+     cmd /c assoc .eml
+     cmd /c assoc .msg
+     ```
+  4. 再看一遍默认应用页面、开始菜单（搜索 EmailFileViewer）和“设置 → 应用 → 已安装的应用”。
+- **预期**：
+  - 第 3 步的搜索没有任何结果（没有名字或数据里含 `EmailFileViewer`、`efv-sidecar`、`realzony` 的键或值）；`assoc` 和 `HKCU`/`HKLM` 的 `.eml`、`.msg` 与运行前完全相同；默认应用页面里的默认程序没有变化。
+  - 开始菜单里没有快捷方式，已安装的应用列表里没有本应用。
+  - 差异里如果出现 Windows 自己记录“程序运行过”的键（例如 `FeatureUsage`、`UserAssist`、`AppCompatFlags` 下的），或 WebView2 运行时自己的键，不是本应用写的，不算失败，把键路径写进“现象”。
+
+#### PORT-03 绿色版的数据放在程序旁边，复制到另一台电脑后设置保留
+- **规格**：app-distribution / Windows 绿色版的数据位置 / 复制到另一台电脑
+- **样本**：`samples/headers-normal.eml`
+- **前置**：两台 Windows（第二台可以是另一台虚拟机），都有 WebView2，都没有运行过本应用。
+- **步骤**：
+  1. 第一台：把绿色版解压到一个有写权限的文件夹，确认里面还没有 `data`。启动，打开设置：模式选 Dark（“深色”），语言选简体中文，配色选一个非默认的（例如 Plum）。退出。
+  2. 查看文件夹：
+
+     ```powershell
+     Get-Content .\data\settings.json
+     Get-ChildItem .\data -Recurse -Depth 1 | Select-Object FullName
+     ```
+
+  3. 查看标准目录：`%APPDATA%\com.github.realzony.emailfileviewer` 和 `%LOCALAPPDATA%\com.github.realzony.emailfileviewer`（`Test-Path` 即可）。
+  4. 把**整个文件夹**（含 `data`）复制到第二台电脑的本地磁盘（U 盘、共享文件夹都行），在第二台上启动，盯着窗口出现的瞬间（做法同 START-01）。
+- **预期**：
+  - `data\settings.json` 含 `"language": "zh-CN"`、`"mode": "dark"` 和所选的配色；`data\webview\` 存在且有内容；`data\logs\` 存在。
+  - 标准目录不存在，或者里面没有因为这次运行而新增的内容。
+  - 第二台启动时，从第一帧起就是深色、简体中文和所选配色，没有闪白、没有英文一闪而过；第二台的标准目录里同样没有写入设置。
+
+#### PORT-04 删除整个文件夹清除全部持久数据
+- **规格**：app-distribution / Windows 绿色版的数据位置（删除整个文件夹）
+- **样本**：`samples/attachments-pdf-xlsx-jpg.eml`
+- **前置**：在 PORT-03 的第一台电脑上继续做，这台机器上没有安装版。
+- **步骤**：
+  1. 启动绿色版，打开样本，点 PDF 附件的“打开”（会往系统临时目录写文件），关闭 PDF 阅读器，然后退出应用。
+  2. 看系统临时目录：`Get-ChildItem "$env:TEMP\EmailFileViewer" -Recurse -ErrorAction SilentlyContinue`。
+  3. 删除整个绿色版文件夹。
+  4. 搜索残留：
+
+     ```powershell
+     Get-ChildItem $env:APPDATA, $env:LOCALAPPDATA -Directory -Filter '*realzony*' -ErrorAction SilentlyContinue
+     Get-ChildItem $env:APPDATA, $env:LOCALAPPDATA -Directory -Filter '*EmailFileViewer*' -ErrorAction SilentlyContinue
+     reg export HKCU "$env:TEMP\hkcu-after-delete.reg" /y; Select-String -Path "$env:TEMP\hkcu-after-delete.reg" -Pattern 'EmailFileViewer','realzony'
+     ```
+
+  5. 重新解压同一个 zip，启动。
+- **预期**：
+  - 第 2 步：退出之后系统临时目录里没有残留的会话文件夹或提取出来的附件（按现有规则在退出时清理）。
+  - 第 4 步：三条命令都没有输出：删除文件夹之后，没有任何本应用的持久数据留在系统里。
+  - 第 5 步：回到首次启动状态（语言跟随系统，模式跟随系统，默认配色）。
+
+#### PORT-05 程序目录不可写时退回标准目录
+- **规格**：app-distribution / Windows 绿色版的数据位置 / 程序目录不可写
+- **样本**：`samples/headers-normal.eml`
+- **步骤**：
+  1. 以管理员身份把解压好的绿色版文件夹整个复制到 `C:\Program Files\EmailFileViewer-portable`（普通用户对 `Program Files` 只有读权限）。
+  2. 以**普通用户**（不是管理员）双击其中的 `EmailFileViewer.exe`。
+  3. 打开样本，把语言改成简体中文，退出，再启动一次。
+  4. 检查：
+
+     ```powershell
+     Test-Path 'C:\Program Files\EmailFileViewer-portable\data'
+     Get-Content "$env:APPDATA\com.github.realzony.emailfileviewer\settings.json"
+     Select-String -Path "$env:LOCALAPPDATA\com.github.realzony.emailfileviewer\logs\*.log" -Pattern 'not writable'
+     ```
+
+  5. 可选的第二种情形：在一个可写文件夹里放好绿色版，先在旁边建一个名叫 `data` 的**普通文件**（不是文件夹），再启动。
+- **预期**：
+  - 应用正常启动，没有错误对话框；邮件能打开；重启后语言仍是简体中文。
+  - 第 4 步：`Test-Path` 返回 `False`（程序目录里没有新增 `data`）；设置在 `%APPDATA%\com.github.realzony.emailfileviewer\settings.json` 里；日志里有一条 WARN，内容是 `the portable data folder next to the program is not writable (...)`。
+  - 第 5 步的情形同样正常启动，设置落在标准目录。
+
+#### PORT-06 缺少 WebView2 时的提示
+- **规格**：app-distribution / 缺少 WebView2 时的提示 / 在没有 WebView2 的系统上运行绿色版
+- **样本**：无
+- **步骤**：
+  1. Win10 1809 的干净快照（按 DIST-02 第 1 步确认没有 WebView2，也没有装安装版）。解压绿色版，双击 `EmailFileViewer.exe`。
+  2. 阅读对话框，按 `Ctrl+C`，把复制到的文字粘贴进记事本，再点“确定”。
+  3. 查看任务管理器里有没有 `emailfileviewer.exe`、`efv-sidecar.exe`，以及 exe 旁边有没有新增 `data` 文件夹。
+  4. 把 Windows 显示语言改成“中文(简体)”（设置 → 时间和语言 → 语言，需要注销再登录），重复第 1 到 3 步；再改回英文。
+  5. 在 Win11（自带 WebView2）上用环境变量模拟：打开命令提示符，执行 `set WEBVIEW2_BROWSER_EXECUTABLE_FOLDER=C:\no-such-folder`，然后在同一个窗口里运行绿色版的 `EmailFileViewer.exe`。这是模拟，如果这台机器上不弹对话框，在“现象”里写“模拟无效”，不算失败，以 Win10 的真实结果为准。
+  6. 装好 WebView2（让 PORT-01 到 PORT-05 可以继续做）。
+- **预期**：
+  - 不是闪退：出现系统的消息框，标题是 `EmailFileViewer`，带错误图标，在所有窗口之上。
+  - 英文系统显示英文：说明需要 Microsoft Edge WebView2 Runtime、给出 `https://developer.microsoft.com/microsoft-edge/webview2/`、让用户装好之后再启动；简体中文系统显示对应的中文。复制到记事本的文字与对话框一致。
+  - 点“确定”之后进程退出，任务管理器里没有残留；exe 旁边没有新增 `data` 文件夹（检测在创建数据目录之前）。
+  - 这个检测对安装版同样有效：装好安装版之后，如果能卸载掉 WebView2（Win10），再启动安装版会看到同样的对话框；这一条是可选的，做了就把结果写进“现象”。
+
+#### PORT-07 绿色版与安装版同时运行时的单实例行为
+- **规格**：无（design.md D13 的单实例说明，`README.txt` 里写了这条）
+- **样本**：`samples/headers-normal.eml`、`samples/body-rtf-only.msg`
+- **前置**：同一台机器上既有安装版又有绿色版。这一项要在第 5 章卸载之前做。
+- **步骤**：
+  1. 启动安装版，打开 `samples/headers-normal.eml`。
+  2. 在命令提示符里运行绿色版：`EmailFileViewer.exe samples\body-rtf-only.msg`。
+  3. 退出所有实例。启动绿色版，再在命令提示符里运行安装版：`"%LOCALAPPDATA%\EmailFileViewer\emailfileviewer.exe" samples\headers-normal.eml`（路径以实际安装目录为准）。
+- **预期**：
+  - 第 2 步：没有出现第二个窗口，后启动的进程很快退出；安装版的窗口被带到最前，新增一个标签页显示 `body-rtf-only.msg`，用的是安装版的设置。
+  - 第 3 步：反过来，绿色版里新增一个标签页，用的是绿色版的设置。
+  - 任务管理器里始终只有一个 `EmailFileViewer` 主程序进程。
+
+#### PORT-08 绿色版压缩包的内容
+- **规格**：app-distribution / 安装包形态（Windows 绿色版）；发布产物可追溯
+- **样本**：无
+- **步骤**：
+  1. 不解压，列出压缩包里的文件：
+
+     ```powershell
+     Add-Type -AssemblyName System.IO.Compression.FileSystem
+     [IO.Compression.ZipFile]::OpenRead((Resolve-Path .\EmailFileViewer_<版本>_x64-portable.zip)).Entries | Select-Object FullName, Length
+     ```
+
+  2. 解压后和安装版对比二进制：
+
+     ```powershell
+     Get-FileHash .\EmailFileViewer.exe, .\efv-sidecar.exe -Algorithm SHA256
+     Get-FileHash "$env:LOCALAPPDATA\EmailFileViewer\emailfileviewer.exe", "$env:LOCALAPPDATA\EmailFileViewer\efv-sidecar.exe" -Algorithm SHA256
+     ```
+
+     （安装目录以安装程序实际显示的路径为准；安装版和绿色版必须来自同一个版本。）
+  3. 9.5 完成后：对压缩包里的 `EmailFileViewer.exe` 和 `efv-sidecar.exe` 各执行 `Get-AuthenticodeSignature`。
+- **预期**：
+  - 压缩包根目录恰好 4 个文件：`EmailFileViewer.exe`、`efv-sidecar.exe`、`EmailFileViewer.portable`、`README.txt`，没有 `data` 文件夹。
+  - 两份二进制与安装版的哈希相同（绿色版和安装版是同一份二进制）。
+  - 9.5 完成后两个 exe 的 `Status` 都是 `Valid`。当前构建未签名，此时这一步填 `N/A`，备注写“9.5 未完成”。
 
 ### 3.2 打开文件（email-opening）
 
@@ -1691,7 +1878,12 @@ macOS 删除 `.app` 即卸载，Fedora 的 AppImage 删除文件即可，两者�
 |------|------|------|
 | 支持的平台 / 在各最低版本上运行 | DIST-01 | 手动 |
 | 无需额外安装运行时 / 全新的 Windows 10 | DIST-02（DIST-03、DIST-04） | 手动 |
-| 安装包形态 / 查看发布页 | DIST-05 | 手动 |
+| 安装包形态 / 查看发布页 | DIST-05（PORT-08） | 手动 |
+| Windows 绿色版免安装运行 / 解压即用 | PORT-01 | 手动 |
+| Windows 绿色版免安装运行 / 不留下注册表和文件关联 | PORT-02 | 手动 |
+| Windows 绿色版的数据位置 / 复制到另一台电脑 | PORT-03（PORT-04） | 手动 |
+| Windows 绿色版的数据位置 / 程序目录不可写 | PORT-05 | 手动 |
+| 缺少 WebView2 时的提示 / 在没有 WebView2 的系统上运行绿色版 | PORT-06 | 手动 |
 | macOS 签名与公证 / 首次打开下载的应用 | DIST-07 | 手动（9.4 完成后） |
 | Windows 代码签名 / 运行安装程序 | DIST-08 | 手动（9.5 完成后） |
 | 卸载 / Windows 上卸载 | UNINST-01（UNINST-02） | 手动 |

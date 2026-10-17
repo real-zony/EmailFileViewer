@@ -20,7 +20,8 @@ log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
-tauri = { version = "2", features = [] }
+# 2.12 起才有 app > appDirectoriesOverride（绿色版靠它把数据目录整体改到 exe 旁边，见 src/portable.rs）
+tauri = { version = "2.12", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
@@ -32,6 +33,10 @@ url = "2"
 # 给 macOS 上提取和保存的附件写 com.apple.quarantine 扩展属性（src/quarantine.rs）
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+# 测试里用模拟运行时检查 appDirectoriesOverride 确实改变了 store 和日志的目录
+tauri = { version = "2.12", features = ["test"] }
 
 [profile.release]
 # 发布的程序里不带符号表和调试信息（体积更小，deb 和 AppImage 里的可执行文件也不会带 .symtab）

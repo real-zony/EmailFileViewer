@@ -4,9 +4,11 @@ mod fileargs;
 mod links;
 mod menu;
 mod opening;
+mod portable;
 mod quarantine;
 mod settings;
 pub mod sidecar;
+mod webview2;
 
 use std::path::{Path, PathBuf};
 
@@ -39,7 +41,10 @@ fn from_theme(theme: Theme) -> ResolvedMode {
 
 // 在创建窗口之前读取已保存的设置和系统语言，通过 initialization_script 在首次绘制前把它们交给页面，
 // 并把窗口底色设成所选配色方案的底色。窗口先隐藏，设好底色后再显示。返回用到的初始设置（菜单文字也用其中的语言）。
-fn create_main_window(app: &tauri::App) -> tauri::Result<InitialSettings> {
+fn create_main_window(
+    app: &tauri::App,
+    webview_data_dir: Option<PathBuf>,
+) -> tauri::Result<InitialSettings> {
     let for_links = app.handle().clone();
     let for_navigation = app.handle().clone();
     // 应用首次加载完成之后，导航策略收紧（见 links.rs）
@@ -54,7 +59,12 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<InitialSettings> {
     let system_locale = sys_locale::get_locale();
     let initial = InitialSettings::resolve(&stored, system_locale.as_deref(), colors);
 
-    let window = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::default())
+    let mut builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::default());
+    // Windows 绿色版：WebView2 的用户数据放在 exe 旁边的 data\webview；其他情况用默认位置
+    if let Some(dir) = webview_data_dir {
+        builder = builder.data_directory(dir);
+    }
+    let window = builder
         .title(MAIN_WINDOW_TITLE)
         .inner_size(MAIN_WINDOW_SIZE.0, MAIN_WINDOW_SIZE.1)
         .min_inner_size(MAIN_WINDOW_MIN_SIZE.0, MAIN_WINDOW_MIN_SIZE.1)
@@ -149,6 +159,19 @@ fn log_plugin() -> tauri::plugin::TauriPlugin<Wry> {
 }
 
 pub fn run() {
+    // Windows：创建任何窗口之前先确认有 WebView2 运行时，没有就弹原生对话框说明并退出（不然应用会无提示地闪退）
+    #[cfg(windows)]
+    webview2::ensure_installed();
+
+    // Windows 绿色版：exe 旁边有标记文件就把全部数据放到旁边的 data 文件夹；不可写时退回标准目录（见 portable.rs）
+    let data_mode = portable::detect_current();
+    let mut context = tauri::generate_context!();
+    if let Some(overridden) = data_mode.app_directories_override() {
+        // store 插件（设置）、日志和 WebView 默认的数据目录都经过 Tauri 的 app_*_dir，跟着一起改
+        context.config_mut().app.app_directories_override = Some(overridden);
+    }
+    let webview_data_dir = data_mode.webview_data_dir();
+
     tauri::Builder::default()
         // 单实例插件必须第一个注册。第二个实例退出前把它的参数和工作目录转给这里：
         // 解析出文件路径作为一个打开批次，并把主窗口带到前台。
@@ -173,13 +196,17 @@ pub fn run() {
             commands::save_all_attachments,
             commands::open_attachment,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            // 插件的 setup 先于这里运行，此时日志已经可用，所以退回标准目录的警告在这里记
+            if let Some(warning) = data_mode.fallback_warning() {
+                log::warn!("{warning}");
+            }
             // sidecar 在第一次请求时才启动，这里只登记
             let service = SidecarService::new(SidecarConfig::bundled()?);
             app.manage(service.clone());
             let coordinator = OpenCoordinator::for_app(app.handle().clone(), service);
             app.manage(coordinator.clone());
-            let initial = create_main_window(app)?;
+            let initial = create_main_window(app, webview_data_dir)?;
             // 只有 macOS 设置菜单栏；Windows 和 Linux 不设置，快捷键沿用网页内的处理（D11 补充）
             #[cfg(target_os = "macos")]
             menu::install(app.handle(), initial.language);
@@ -196,7 +223,7 @@ pub fn run() {
             coordinator.submit(paths);
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| match event {
             // 退出时关闭 sidecar 的 stdin，等它自己清理并退出，等不到再强制结束；没启动过则什么也不做

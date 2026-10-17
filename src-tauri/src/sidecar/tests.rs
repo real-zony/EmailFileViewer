@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, Once};
 use std::time::{Duration, Instant};
 
-use serde_json::{Value, json};
+#[cfg(unix)]
+use serde_json::Value;
+use serde_json::json;
 use tokio::time::sleep;
 
 use super::testing::{fake_command, service, service_with, timeouts};
@@ -922,6 +924,7 @@ fn the_bundled_sidecar_is_next_to_the_main_executable() {
 
 // ---------------------------------------------------------------- 真实的 sidecar
 
+#[cfg(unix)]
 fn sample(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../samples")
@@ -930,6 +933,7 @@ fn sample(name: &str) -> PathBuf {
         .unwrap()
 }
 
+#[cfg(unix)]
 fn attachments(document: &Value) -> Vec<Value> {
     document["attachments"].as_array().unwrap().clone()
 }
