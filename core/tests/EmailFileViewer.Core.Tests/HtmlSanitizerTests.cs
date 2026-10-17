@@ -201,12 +201,59 @@ public class HtmlSanitizerTests
     }
 
     [Fact]
-    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 页内锚点链接保持原样，免得点击后去开新窗口")]
-    public void FragmentOnlyLinks_AreLeftAlone()
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 页内锚点链接不开新窗口，地址写成 about:srcdoc#锚点")]
+    public void FragmentOnlyLinks_StayInThePage_WithoutTargetRelOrTitle()
     {
         var result = Run("<a href=\"#section\">jump</a>");
 
-        Assert.Equal("<a href=\"#section\">jump</a>", result.Html);
+        Assert.Equal("<a href=\"about:srcdoc#section\">jump</a>", result.Html);
+    }
+
+    [Theory]
+    [InlineData("<a href=\"#x\">t</a>", "<a href=\"about:srcdoc#x\">t</a>")]
+    [InlineData("<a href=\"#\">top</a>", "<a href=\"about:srcdoc#\">top</a>")]
+    [InlineData("<a href=#x>t</a>", "<a href=\"about:srcdoc#x\">t</a>")]
+    [InlineData("<A HREF=\"#Section_1.2-é\">t</A>", "<A HREF=\"about:srcdoc#Section_1.2-é\">t</A>")]
+    [InlineData("<a href=\"#a%20b?c=d/e:f\">t</a>", "<a href=\"about:srcdoc#a%20b?c=d/e:f\">t</a>")]
+    [InlineData("<a href=\"  #x\t\">t</a>", "<a href=\"about:srcdoc#x\">t</a>")]
+    [InlineData("<a class=\"c\" href=\"#x\" style=\"color:red\">t</a>", "<a class=\"c\" href=\"about:srcdoc#x\" style=\"color:red\">t</a>")]
+    [InlineData("<a href=\"#x\" target=\"_self\" title=\"mine\">t</a>", "<a href=\"about:srcdoc#x\" target=\"_self\" title=\"mine\">t</a>")]
+    [InlineData("<map><area href=\"#x\" shape=\"rect\"></map>", "<map><area href=\"about:srcdoc#x\" shape=\"rect\"></map>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 页内锚点链接的地址改写")]
+    public void FragmentOnlyHref_IsRewrittenToTheSrcdocAddress(string html, string expected)
+    {
+        var result = Run(html);
+
+        Assert.Equal(expected, result.Html);
+        Assert.False(result.HasRemoteContent);
+    }
+
+    [Theory]
+    [InlineData("<a href=\"https://a.example/p#x\">t</a>")]
+    [InlineData("<a href=\"page.html#x\">t</a>")]
+    [InlineData("<a href=\"mailto:a@example.com#x\">t</a>")]
+    [InlineData("<map><area href=\"https://a.example/p#x\"></map>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 带地址的链接不受锚点改写影响")]
+    public void LinksWithMoreThanAFragment_KeepTheirAddress_AndStillOpenInANewWindow(string html)
+    {
+        var result = Run(html);
+
+        Assert.DoesNotContain("about:srcdoc", result.Html);
+        Assert.Contains("target=\"_blank\"", result.Html);
+        Assert.Contains("rel=\"noopener noreferrer\"", result.Html);
+        Assert.Contains("title=", result.Html);
+    }
+
+    [Theory]
+    [InlineData("<a href=\"\">t</a>")]
+    [InlineData("<a href=\"  \">t</a>")]
+    [InlineData("<a name=\"top\">t</a>")]
+    [Trait("Scenario", "email-viewing / 正文链接在系统浏览器中打开 / 没有地址的链接保持原样")]
+    public void LinksWithoutAnAddress_AreUnchanged(string html)
+    {
+        var result = Run(html);
+
+        Assert.Equal(html, result.Html);
     }
 
     [Theory]

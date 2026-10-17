@@ -121,6 +121,8 @@ this is not json
 | `isEncrypted` | boolean | S/MIME 加密，无法显示正文（`body.sourceFormat` 为 `None`） |
 | `hasRemoteContent` | boolean | 正文引用了远程资源（图片、样式表、字体） |
 
+**锚点链接**：`<a>` 和 `<area>` 上只有锚点的 `href`（`#x`、`#`）会改写成 `about:srcdoc#x`、`about:srcdoc#`，锚点部分原样保留。正文渲染在 srcdoc iframe 里，浏览器会按父页面的地址把 `#x` 解析成应用自己的页面（`tauri://localhost#x`），点击后 iframe 就被导航走了；`about:srcdoc#x` 是文档自己的地址，只会在 iframe 内滚动。这类链接和以前一样不加 `target="_blank"`、`rel`、`title`。
+
 **正文的大小上限**（Core 里的具名常量）：
 
 | 上限 | 取值 | 超出时 |

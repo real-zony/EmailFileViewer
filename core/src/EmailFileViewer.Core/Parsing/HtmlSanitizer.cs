@@ -30,6 +30,9 @@ internal sealed partial class HtmlSanitizer
     /// </summary>
     internal const int MaxOutputLength = 32 * 1024 * 1024;
 
+    // srcdoc 文档自己的地址，后面接 "#锚点" 就是页内跳转
+    private const string SrcdocUrlPrefix = "about:srcdoc";
+
     // 连同内容一起删除
     private static readonly HashSet<string> RemoveWithContent = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -436,12 +439,22 @@ internal sealed partial class HtmlSanitizer
         return string.Join(", ", candidates);
     }
 
-    // 链接：在新窗口打开，不带来源信息，title 写成实际地址（去掉浏览器导航时会忽略的换行和制表符），这样悬停时不需要脚本也能看到真实地址
+    // 链接：在新窗口打开，不带来源信息，title 写成实际地址（去掉浏览器导航时会忽略的换行和制表符），这样悬停时不需要脚本也能看到真实地址。
+    // 只有锚点的链接是页内跳转：不加 target、rel、title，但要把地址写成 about:srcdoc#锚点
     private static void ApplyLinkAttributes(List<(string Name, string? Value)> attributes)
     {
-        var href = attributes.FirstOrDefault(a => a.Name.Equals("href", StringComparison.OrdinalIgnoreCase)).Value;
-        if (string.IsNullOrWhiteSpace(href) || UrlClassifier.Classify(href) == UrlKind.Fragment)
+        var hrefIndex = attributes.FindIndex(a => a.Name.Equals("href", StringComparison.OrdinalIgnoreCase));
+        var href = hrefIndex < 0 ? null : attributes[hrefIndex].Value;
+        if (string.IsNullOrWhiteSpace(href))
         {
+            return;
+        }
+
+        if (UrlClassifier.Classify(href) == UrlKind.Fragment)
+        {
+            // 正文放在 srcdoc iframe 里，浏览器会按父页面的地址解析 "#x"（tauri://localhost#x），点击后 iframe 被导航到应用自己的页面。
+            // 写成 about:srcdoc#x 就是文档自己的地址加锚点，在 iframe 内滚动；<base> 被 CSP 的 base-uri 'none' 禁用，不能用它解决
+            attributes[hrefIndex] = (attributes[hrefIndex].Name, SrcdocUrlPrefix + UrlClassifier.Clean(href));
             return;
         }
 
