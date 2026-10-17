@@ -17,6 +17,7 @@ fn is_file_url(arg: &OsStr) -> bool {
 /// 跳过空参数、`-` 开头的参数（例如 macOS 的 `-psn_…`）和目录；相对路径按 `cwd` 补全——
 /// 单实例转发来的参数是第二个实例的参数，要用它的工作目录；也接受 `file://` URL（`FILE://` 也行）。
 /// **不存在的路径照样保留**：交给打开批次，由它得到“无法读取”的失败事件，用户才知道出了什么事，而不是什么也没发生。
+/// 存在但不是普通文件的（设备文件、FIFO）也保留，由打开批次（`opening::open_path`）报“不支持的格式”，不会交给 sidecar。
 pub fn paths_from_args<S: AsRef<OsStr>>(args: &[S], cwd: &Path) -> Vec<PathBuf> {
     args.iter()
         .skip(1)

@@ -333,7 +333,7 @@ async fn read_line_capped<R: AsyncBufRead + Unpin>(
     buf.clear();
     // 最多读 limit + 1 字节：多出来的那一个字节用来区分“正好 limit 字节加换行”和“更长”
     let read = (&mut *reader)
-        .take(limit as u64 + 1)
+        .take((limit as u64).saturating_add(1))
         .read_until(b'\n', buf)
         .await?;
     Ok(if read == 0 {
@@ -711,6 +711,19 @@ mod tests {
         // 内容 6 字节：超限，只读了开头 limit + 1 个字节
         let over = read_all(b"123456\nnext\n", 5).await;
         assert_eq!(over[0], (LineRead::TooLong, b"123456".to_vec()));
+    }
+
+    #[tokio::test]
+    async fn the_largest_possible_limit_does_not_overflow() {
+        // limit + 1 在 usize::MAX 时会溢出，必须饱和
+        let lines = read_all(b"abc\nlast", usize::MAX).await;
+        assert_eq!(
+            lines,
+            [
+                (LineRead::Complete, b"abc\n".to_vec()),
+                (LineRead::Complete, b"last".to_vec())
+            ]
+        );
     }
 
     #[tokio::test]

@@ -12,7 +12,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 
-use crate::sidecar::{DocHandle, OpenedDocument, SidecarError, SidecarService};
+use crate::sidecar::{DocHandle, OpenedDocument, SidecarError, SidecarService, code};
 
 /// 事件只发给主窗口。
 const MAIN_WINDOW: &str = "main";
@@ -98,6 +98,28 @@ pub fn redact_path(message: &str, path: &Path) -> String {
         return message.to_owned();
     }
     message.replace(full.as_ref(), &file_name_of(path))
+}
+
+/// 打开一个文件。路径存在但不是普通文件（设备文件、FIFO、目录……）的不交给 sidecar：
+/// 读 `/dev/zero` 或没有写端的 FIFO 会一直读到超时，还白白杀掉一个 sidecar。
+/// 这类路径按“不支持的格式”失败；路径不存在的照常交给 sidecar，由它报“无法读取”。
+/// 错误说明里没有路径，事件里只有文件名。
+pub async fn open_path(
+    service: &SidecarService,
+    path: &Path,
+) -> Result<OpenedDocument, SidecarError> {
+    let probe = path.to_owned();
+    // 在阻塞线程里查：网络盘上的 stat 可能很慢
+    let metadata = tokio::task::spawn_blocking(move || std::fs::metadata(probe)).await;
+    if let Ok(Ok(metadata)) = metadata
+        && !metadata.is_file()
+    {
+        return Err(SidecarError::remote(
+            code::UNSUPPORTED_FORMAT,
+            "the path is not a regular file (it is a directory, device or pipe)",
+        ));
+    }
+    service.open_file(path).await
 }
 
 /// 依次打开批次里的文件。每个文件完成后立即调用 `emit`；单个文件失败不影响后面的文件；最后发汇总。
@@ -220,7 +242,7 @@ impl OpenCoordinator {
                     batch,
                     |path| {
                         let service = service.clone();
-                        async move { service.open_file(&path).await }
+                        async move { open_path(&service, &path).await }
                     },
                     &emit,
                 )
@@ -696,6 +718,95 @@ mod coordinator_tests {
         );
         // 失败事件里只有文件名，没有补全后的完整路径
         assert!(!all[0].1.to_string().contains("/work"), "{}", all[0].1);
+    }
+
+    /// 在临时目录里建一个 FIFO（没有写端，打开后读会一直阻塞）。
+    #[cfg(unix)]
+    fn make_fifo(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("efv-fifo-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let fifo = dir.join("mail.eml");
+        assert!(
+            std::process::Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success()
+        );
+        fifo
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn devices_pipes_and_directories_fail_as_unsupported_without_reaching_the_sidecar() {
+        let fifo = make_fifo("batch");
+        let folder = fifo.parent().unwrap().join("folder.eml");
+        std::fs::create_dir_all(&folder).unwrap();
+        let (coordinator, events, service) = coordinator();
+        coordinator.app_ready();
+        coordinator.submit(vec![fifo.clone(), PathBuf::from("/dev/null"), folder]);
+        let all = wait_for(&events, 4).await;
+        let summary: Vec<_> = all
+            .iter()
+            .take(3)
+            .map(|(name, value)| {
+                (
+                    name.as_str(),
+                    value["fileName"].as_str().unwrap(),
+                    value["code"].as_str().unwrap(),
+                )
+            })
+            .collect();
+        let failed = "efv://document-open-failed";
+        assert_eq!(
+            summary,
+            [
+                (failed, "mail.eml", "unsupported_format"),
+                (failed, "null", "unsupported_format"),
+                (failed, "folder.eml", "unsupported_format"),
+            ]
+        );
+        assert_eq!(
+            all[3].1,
+            serde_json::json!({ "batchId": 1, "opened": 0, "failed": 3 })
+        );
+        // 只有文件名，没有完整路径
+        let text = serde_json::to_string(&all.iter().map(|(_, v)| v).collect::<Vec<_>>()).unwrap();
+        assert!(!text.contains("/dev/"), "{text}");
+        assert!(!text.contains("efv-fifo"), "{text}");
+        // 一个都没有交给 sidecar，它甚至没有启动
+        assert!(service.current_process().await.is_none());
+        let _ = std::fs::remove_dir_all(fifo.parent().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_non_regular_file_does_not_stop_the_rest_of_the_batch() {
+        let fifo = make_fifo("mixed");
+        let (coordinator, events, _service) = coordinator();
+        coordinator.app_ready();
+        coordinator.submit(vec![
+            PathBuf::from("/mail/first.eml"),
+            fifo.clone(),
+            PathBuf::from("/mail/missing-last.eml"),
+        ]);
+        let all = wait_for(&events, 4).await;
+        let codes: Vec<_> = all
+            .iter()
+            .take(3)
+            .map(|(_, v)| v["code"].as_str())
+            .collect();
+        // 第一个正常打开（没有 code），FIFO 不支持，不存在的文件由 sidecar 报无法读取
+        assert_eq!(
+            codes,
+            [None, Some("unsupported_format"), Some("unreadable")]
+        );
+        assert_eq!(
+            all[3].1,
+            serde_json::json!({ "batchId": 1, "opened": 1, "failed": 2 })
+        );
+        let _ = std::fs::remove_dir_all(fifo.parent().unwrap());
     }
 
     #[tokio::test]

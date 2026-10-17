@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use opening::OpenCoordinator;
 use settings::{InitialSettings, ResolvedMode, SETTINGS_FILE, WindowColors};
 use sidecar::{SidecarConfig, SidecarService};
+use tauri::webview::PageLoadEvent;
 use tauri::window::Color;
 use tauri::{Manager, RunEvent, Theme, WebviewUrl, WebviewWindowBuilder, Wry};
 
@@ -41,6 +42,9 @@ fn from_theme(theme: Theme) -> ResolvedMode {
 fn create_main_window(app: &tauri::App) -> tauri::Result<InitialSettings> {
     let for_links = app.handle().clone();
     let for_navigation = app.handle().clone();
+    // 应用首次加载完成之后，导航策略收紧（见 links.rs）
+    let loaded = links::AppLoaded::default();
+    let for_load = loaded.clone();
     let colors = WindowColors::embedded();
     let store_path = tauri_plugin_store::resolve_store_path(app.handle(), SETTINGS_FILE).ok();
     let stored = store_path
@@ -58,7 +62,12 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<InitialSettings> {
         .initialization_script(settings::initialization_script(&initial))
         // 邮件正文里的链接：只放行 http、https、mailto 并交给系统默认程序，应用内一律不创建新窗口（design.md D5）
         .on_new_window(move |url, _features| links::on_new_window(&for_links, &url))
-        .on_navigation(move |url| links::on_navigation(&for_navigation, url))
+        .on_navigation(move |url| links::on_navigation(&for_navigation, url, &loaded))
+        .on_page_load(move |_, payload| {
+            if payload.event() == PageLoadEvent::Finished {
+                for_load.mark();
+            }
+        })
         .visible(false)
         .build()?;
 
