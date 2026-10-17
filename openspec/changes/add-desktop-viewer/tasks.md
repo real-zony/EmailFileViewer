@@ -72,16 +72,16 @@
 
 - [x] 9.1 配置安装包：Windows 用 NSIS 生成 `.exe` 并内置 WebView2 引导安装，macOS 生成 arm64 和 x64 两个 `.dmg`（或用 `lipo` 合并 sidecar 后生成通用版），Linux 生成 AppImage 和声明了依赖的 `.deb`；验证在 CI 中三个平台都产出这些文件
 - [x] 9.2 新增 `.github/workflows/release.yml`：推送 `v*` 标签时在四个平台上构建，创建草稿 Release 并附上 SHA-256 校验文件；在 `docs/release.md` 中写明发版步骤和需要配置的 Secrets；验证推送测试标签 `v0.0.1-test` 后生成的草稿 Release 包含全部安装包和校验文件
-- [ ] 9.3 **（需要用户操作）** 准备 Apple Developer Program 账号和 Windows 签名渠道（Certum 或 SignPath），把凭据配置进 GitHub Secrets；验证 `docs/release.md` 中列出的 Secrets 都已配置
-- [ ] 9.4 在 release 流程中加入 macOS 签名和公证，并对应用和 sidecar 执行 `codesign -dv` 和 `spctl -a -vv` 检查；验证在一台干净的 Mac 上从浏览器下载 dmg 后首次打开不出现拦截提示
-- [ ] 9.5 通过 `signCommand` 接入 Windows 签名，对安装程序、主程序和 sidecar 执行 `signtool verify /pa`；验证在 Windows 上运行安装程序时显示发布者名称
+- [ ] 9.3 **（需要用户操作）** 准备 Apple Developer Program 账号和 Windows 签名渠道（Certum 或 SignPath），把凭据配置进 GitHub Secrets；验证 `docs/release.md` 中列出的 Secrets 都已配置（2026-10-17 用户决定推迟，作为待办）
+- [ ] 9.4 在 release 流程中加入 macOS 签名和公证，并对应用和 sidecar 执行 `codesign -dv` 和 `spctl -a -vv` 检查；验证在一台干净的 Mac 上从浏览器下载 dmg 后首次打开不出现拦截提示（2026-10-17 用户决定推迟，作为待办）
+- [ ] 9.5 通过 `signCommand` 接入 Windows 签名，对安装程序、主程序和 sidecar 执行 `signtool verify /pa`；验证在 Windows 上运行安装程序时显示发布者名称（2026-10-17 用户决定推迟，作为待办）
 - [x] 9.7 按 design.md D13 实现 Windows 绿色版：通过标记文件判断是否为绿色模式，数据目录放在 exe 旁边（不可写时退回标准目录），启动前检测 WebView2 并在缺少时用原生对话框提示，release.yml 产出 `x64-portable.zip` 并加入 SHA256SUMS，docs/release.md 和验收清单补上对应检查项；验证：Rust 单元测试覆盖模式判断、目录选择和退回逻辑，测试标签构建出的 zip 内容正确，`app-distribution` 中绿色版的各场景在验收清单中都有对应检查项
-- [ ] 9.6 验证卸载：在 Windows 和通过 deb 安装的 Ubuntu 上卸载后，应用文件被删除且 `.eml` / `.msg` 不再关联本应用
+- [ ] 9.6 验证卸载：在 Windows 和通过 deb 安装的 Ubuntu 上卸载后，应用文件被删除且 `.eml` / `.msg` 不再关联本应用（待办：Windows 卸载待逐项核对，Ubuntu 的 deb 卸载待测）
 
 ## 10. 端到端验收
 
-- [ ] 10.1 在各最低平台（Windows 10 1809 且未装 .NET 和 WebView2、macOS 15、Ubuntu 22.04、Debian 13、Fedora 43）上安装正式构建的安装包，用全部样本逐条核对六个规格中的场景；把结果写入 `docs/verification/add-desktop-viewer.md`，验证每个场景都有通过记录或已登记的问题
-- [ ] 10.2 安全与隐私验收：在三个平台上用恶意 HTML 样本确认脚本不执行、IPC 无法调用；在断网状态下打开全部样本，并用抓包或系统网络监视确认未允许远程内容时没有任何网络请求；验证结果写入同一份验收记录
+- [ ] 10.1 在各最低平台（Windows 10 1809 且未装 .NET 和 WebView2、macOS 15、Ubuntu 22.04、Debian 13、Fedora 43）上安装正式构建的安装包，用全部样本逐条核对六个规格中的场景；把结果写入 `docs/verification/add-desktop-viewer.md`，验证每个场景都有通过记录或已登记的问题（2026-10-17：macOS 和 Windows 由用户初步试用，未发现大问题，尚未按清单逐项核对；Linux 待测）
+- [ ] 10.2 安全与隐私验收：在三个平台上用恶意 HTML 样本确认脚本不执行、IPC 无法调用；在断网状态下打开全部样本，并用抓包或系统网络监视确认未允许远程内容时没有任何网络请求；验证结果写入同一份验收记录（待办：Windows 和 Linux 的抓包、链接与锚点行为尚未逐项核对）
 
 ## Workflow follow-up
 
